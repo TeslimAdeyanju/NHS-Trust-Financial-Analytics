@@ -41,6 +41,7 @@ This project applies real NHS finance conventions throughout:
 | ODS organisation codes | 3-character provider codes (`org_code`) across all dimensions |
 | Agenda for Change pay context | Pay as % of income KPI; WTE cost benchmarking |
 | EBITDA margin RAG thresholds | ≥2% Green · 0–2% Amber · <0% Red (NHS England standard) |
+| Financial year labelling | `YYYY/YY` (e.g. `2023/24`); no calendar-month grain — TAC is an annual return |
 
 ---
 
@@ -52,9 +53,9 @@ This project applies real NHS finance conventions throughout:
 | Dimensional modelling | Star schema: `dim_trust` · `dim_financial_year` · `dim_worksheet` · `dim_subcode` → `fct_tac` (2.18M rows) |
 | SQL analytics | Analytical views for I&E, expenditure, workforce, KPIs, and sector scorecard |
 | Data quality | 10-query validation suite with expected-value assertions |
-| Financial KPIs | EBITDA margin · Pay % of income · Cost per WTE · Budget variance · CIP achievement |
-| Power BI | 8-CSV export pipeline · DAX measures · 5-page dashboard |
-| NHS domain knowledge | TAC subcode taxonomy · FReM conventions · sector benchmarks · ICB hierarchy |
+| Financial KPIs | EBITDA margin · Pay % of income · Cost per WTE · Net surplus margin |
+| Power BI | 9-CSV export pipeline · 51 DAX measures · 5-page dashboard |
+| NHS domain knowledge | TAC subcode taxonomy · FReM conventions · sector benchmarks |
 
 ---
 
@@ -85,35 +86,49 @@ Two MySQL databases:
 
 ## Project structure
 
-```
+```text
 ├── agent_docs/
 │   ├── data_dictionary.md        # TAC subcode and column reference
 │   ├── kpi_definitions.md        # KPI formulas, RAG thresholds, FReM alignment
 │   └── report_calendar.md        # NHS period table and reporting cycle
 │
-├── data/
-│   ├── raw/                      # NHS TAC Excel source files (not committed — ~170MB)
+├── data/                         # git-ignored — raw source and pipeline output, both regenerable
+│   ├── raw/                      # NHS TAC Excel source files (~170MB)
 │   └── processed/
-│       └── powerbi_export/       # 8 CSVs ready for Power BI
+│       └── powerbi_export/       # 9 CSVs ready for Power BI
+│
+├── docs/images/                  # Screenshots and diagrams used in PROJECT_DOCUMENTATION.md
 │
 ├── python/
 │   ├── ingestion/
-│   │   └── load_tac_data.py      # Ingests all 6 TAC files into MySQL
+│   │   └── load_tac_data.py            # Ingests all 6 TAC files into MySQL
+│   ├── transformation/
+│   │   ├── transform_tac_data.py       # Enrichment: sector flags, YoY, sector benchmarks
+│   │   └── validate_tac_data.py        # Data-quality checks → validation_report.csv
 │   └── reporting/
-│       └── export_for_powerbi.py # Exports MySQL views to CSV
+│       └── export_for_powerbi.py       # Exports MySQL views to 9 CSVs
 │
 ├── sql/
 │   ├── schema/
 │   │   └── create_tables_mysql.sql       # Full schema DDL
 │   ├── views/
 │   │   ├── v_validation_checks.sql       # 10 data integrity checks
-│   │   └── v_trust_annual_scorecard.sql  # Wide analytical scorecard
+│   │   └── v_trust_annual_scorecard.sql  # Wide scorecard view (DirectQuery / ad-hoc SQL, not the CSV export)
 │   └── analysis/
-│       └── sector_trend_analysis.sql     # Sector-level trend queries
+│       ├── sector_trend_analysis.sql     # Sector-level trend queries
+│       └── benchmarking_analysis.sql     # Trust-level benchmarking queries
 │
-└── power_bi/
-    └── setup_guide.md            # Model relationships, DAX measures, page specs
+├── power_bi/
+│   ├── setup_guide.md            # Model relationships, page specs
+│   ├── dax_measures.md           # All 51 measures, human-readable
+│   └── dax/_Measures.tmdl        # Exact Power BI Desktop export
+│
+└── reports/
+    └── nhs_sector_financial_review_2324.md  # Annual sector outturn narrative
 ```
+
+Full tree, including every `CLAUDE.md` and `notebook/`, is in `PROJECT_DOCUMENTATION.md` under
+"Repository Structure".
 
 ---
 
@@ -149,7 +164,7 @@ python python/ingestion/load_tac_data.py
 
 # 4. Export for Power BI
 python python/reporting/export_for_powerbi.py
-#    Writes 8 CSVs to data/processed/powerbi_export/
+#    Writes 9 CSVs to data/processed/powerbi_export/
 
 # 5. Build the dashboard
 #    Follow power_bi/setup_guide.md

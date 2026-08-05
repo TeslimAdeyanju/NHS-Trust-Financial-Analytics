@@ -1,105 +1,85 @@
 # Python Layer — Pipeline Conventions
 
+This describes the four scripts that actually exist under `python/`. There is no `requirements.txt`,
+`utils/` package, or `tests/` directory in this repo — don't assume they're there. See the top-level
+`CLAUDE.md` for why this file (unlike the earlier version of it) is scoped to what's real.
+
 ## Environment
 
 - Python 3.11+
-- Package manager: `pip` with `requirements.txt`
-- Key libraries: `pandas`, `openpyxl`, `sqlalchemy`, `psycopg2`, `pydantic`, `pytest`
+- No package manager config checked in — install directly:
+  `pip install pandas sqlalchemy pymysql openpyxl`
+- No linter or test runner configured
 
 ## Directory Layout
 
-```
+```text
 python/
-├── ingestion/          # Parse and load raw NHS files into staging
-├── transformation/     # Clean, type-cast, calculate derived fields
-├── validation/         # Schema and business rule checks
-├── reporting/          # Export outputs for Power BI or reports
-├── utils/              # Shared helpers (db connection, logging, constants)
-└── tests/              # pytest unit tests mirroring the above structure
-```
-
-## Coding Style
-
-- Functions over classes unless state is genuinely needed
-- One function = one responsibility; max ~40 lines per function
-- All monetary arithmetic must preserve £000s denomination — add inline comment if it changes
-- No magic numbers — define constants in `utils/constants.py`
-
-## Pandas Style
-
-- Always specify `dtype` when reading CSVs: `pd.read_csv(path, dtype={...})`
-- Use `.pipe()` chaining for multi-step transformations
-- Never use `.iterrows()` — use vectorised operations or `.apply()` only when necessary
-- Column names: `snake_case` matching the SQL schema
-- After any merge, assert the expected row count hasn't changed unexpectedly
-
-## NHS File Ingestion Rules
-
-### Provider Finance Excel Files
-- NHS England finance returns use multi-row headers — skip the first N rows explicitly
-- Sheet names vary by year; always look up sheet names dynamically: `pd.ExcelFile(path).sheet_names`
-- Monetary columns arrive as strings with commas — strip and cast: `pd.to_numeric(col.str.replace(',', ''))`
-- Suppress subtotal rows: drop rows where `account_code` is null or starts with `TOTAL`
-
-### Workforce CSV Files
-- ODS `org_code` column may contain trailing spaces — always `.str.strip()`
-- WTE values may be `-` for suppressed data — replace with `NaN`, not 0
-
-## Period Key Generation
-
-```python
-# period_key is YYYYMM integer
-# NHS M01 = April, M12 = March
-PERIOD_TO_MONTH = {f"M{i:02d}": (i + 3) if i <= 9 else (i - 9) for i in range(1, 13)}
-
-def make_period_key(financial_year: str, period_label: str) -> int:
-    """Convert '2023/24' + 'M01' -> 202304"""
-    start_year = int(financial_year[:4])
-    month = PERIOD_TO_MONTH[period_label]
-    year = start_year if month >= 4 else start_year + 1
-    return year * 100 + month
+├── ingestion/
+│   └── load_tac_data.py         # Excel → nhs_stg → nhs_finance (dim_trust, fct_tac) — stages ③④
+├── transformation/
+│   ├── transform_tac_data.py    # Enrichment: sector flags, YoY, income mix, sector benchmarks — stage ④
+│   └── validate_tac_data.py     # 10-12 data-quality checks → data/processed/validation_report.csv — stage ④
+└── reporting/
+    └── export_for_powerbi.py    # nhs_finance views/tables → 9 CSVs in data/processed/powerbi_export/ — stage ⑤
 ```
 
 ## Database Connection
 
-Use `utils/db.py` — never hardcode credentials:
+Each script hardcodes its own `DB_USER` / `DB_PASSWORD` / `DB_HOST` / `DB_PORT` constants at the top of the
+file (`root` / local MySQL on `127.0.0.1:3306`) and builds a SQLAlchemy engine from them — there is no
+shared `utils/db.py` and no environment-variable config. This is a known shortcut, not an oversight; update
+the constants in each script if your local MySQL differs. Don't "fix" this by adding a `.env`/config layer
+unless asked — it would touch all four scripts for a portfolio project that only ever runs against one
+local database.
 
 ```python
-import os
-from sqlalchemy import create_engine
-
-def get_engine():
-    url = os.environ["NHS_DB_URL"]  # set in .env, never committed
-    return create_engine(url)
+DB_USER, DB_PASSWORD, DB_HOST, DB_PORT = "root", "Password1234", "127.0.0.1", 3306
+url = f"mysql+pymysql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{database}?charset=utf8mb4"
+engine = create_engine(url)
 ```
 
-## Output Paths
+## Coding Style (as actually used in these four files)
 
-| Output type        | Path                                   |
-|--------------------|----------------------------------------|
-| Processed CSV      | `data/processed/<table_name>.csv`      |
-| Validation report  | `data/processed/validation_report.csv` |
-| Power BI export    | `data/processed/powerbi_export/`       |
+- Functions, not classes — no script defines a class
+- One function per pipeline step, named for what it does: `filename_to_financial_year()`,
+  `promote_to_fact()`, `build_sector_benchmarks()`, `check_orphan_fact_rows()`
+- `logging` module for all pipeline output (`log = logging.getLogger(__name__)`), never `print()`
+- Every `_000s` column stays in £000s through every transform; conversion to £m happens only at the very
+  edge — in DAX measures on import into Power BI, not in Python
+- Docstring header at the top of every script (purpose, usage, expected inputs) — see any of the four files
+  for the pattern
 
-## Validation Rules
+## Pandas Patterns Used Here
 
-Every ingestion run must check:
-1. No null values in `org_code`, `period_key`, `account_type`
-2. `actual_000s` is numeric (no text leakage)
-3. Row count is within ±5% of the previous period's load
-4. No duplicate `(org_code, period_key, account_code)` combinations
+- `pd.read_excel(path, sheet_name=...)` for the two sheets that matter per workbook (`List of Providers`,
+  `All data`) — see `find_sheet_name()` in `load_tac_data.py` for handling sheet-name drift across years
+- Column-name normalisation via an explicit rename map for the 2021/22 files, which used different header
+  text (`Organisation Name` with a space, `Value number`) than 2022/23 and 2023/24
+- `engine.begin()` context manager for the scoped DELETE + `to_sql(..., if_exists="append")` staging load,
+  and for `ON DUPLICATE KEY UPDATE` upserts into `fct_tac` / `dim_trust`
+- `CAST(... AS SIGNED)` in the SQL text itself before any export, rather than relying on pandas to coerce
+  MySQL's native `DECIMAL` — see `export_for_powerbi.py`'s `export_query()`. Reading unwrapped `DECIMAL`
+  columns produces Python `Decimal` objects that write inconsistently to CSV
+- `encoding="utf-8-sig"` on every `to_csv()` call in `export_for_powerbi.py` — the BOM is required for
+  Excel/Power BI's CSV connector to read the `£` symbol correctly
 
-Validation failures write a row to `validation_report.csv` and raise a warning — they do NOT halt the pipeline unless severity is `CRITICAL`.
+## Validation Pattern
 
-## Testing
-
-- Test file for `ingestion/load_trust_returns.py` lives at `tests/test_load_trust_returns.py`
-- Use `pytest` fixtures with small sample DataFrames — do not use real NHS files in tests
-- Run: `pytest python/tests/ -v`
+`validate_tac_data.py` runs a fixed set of named checks (`check_row_counts`, `check_no_duplicate_keys`,
+`check_income_totals`, `check_ebitda_margin`, `check_orphan_fact_rows`, etc.), each calling a shared
+`record(check_name, severity, passed, detail)` helper, then `write_report()` dumps every result to
+`data/processed/validation_report.csv`. This mirrors the ten queries in `sql/views/v_validation_checks.sql`
+— the SQL file is the version to run ad-hoc from a MySQL client; this script is the version that produces a
+committable, timestamped artifact.
 
 ## Do Not
 
-- Do not commit `.env` files or database URLs
-- Do not load entire NHS files into memory if >500MB — use chunked reading
-- Do not silently drop rows — log a warning with row count before and after any filter
-- Do not use `print()` for pipeline logging — use Python `logging` module
+- Do not add a `.env`/`os.environ` config layer without being asked — the hardcoded constants are the
+  current, intentional state (see above)
+- Do not use `.iterrows()` for anything the pipeline currently does with a vectorised `pandas` operation or
+  a scoped SQL `UPDATE`/`INSERT`
+- Do not truncate-and-reload `fct_tac` or `dim_trust` the way staging tables are reloaded — they accumulate
+  across all six source files; see the UPSERT rationale in `PROJECT_DOCUMENTATION.md`, stage ④
+- Do not silently drop rows in `validate()` — a critical failure must raise and stop the load before any
+  write occurs

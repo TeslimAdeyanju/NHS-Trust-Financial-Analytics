@@ -1,0 +1,202 @@
+/// Dedicated measure container
+table _Measures
+	lineageTag: acdb8095-693e-4cad-8488-f23822fb4bf5
+
+	measure 'Total Income (£m)' = DIVIDE(SUMX(fact_ie_summary, fact_ie_summary[total_income_000s]), 1000, 0)
+		formatString: £#,0.0m;£-#,0.0m;£0.0m
+		lineageTag: 6e40bebe-f4b0-4a58-9d0b-a584a5a872dd
+
+	measure 'Patient Care Income (£m)' = DIVIDE(SUMX(fact_ie_summary, fact_ie_summary[patient_care_income_000s]), 1000, 0)
+		formatString: £#,0.0m;£-#,0.0m;£0.0m
+		lineageTag: 9472ee5f-bb9b-4885-989f-a2eb50bc9e3a
+
+	measure 'Other Income (£m)' = DIVIDE(SUMX(fact_ie_summary, fact_ie_summary[other_income_000s]), 1000, 0)
+		formatString: £#,0.0m;£-#,0.0m;£0.0m
+		lineageTag: b1828f24-d426-40eb-b17a-3ad35ca7c927
+
+	measure 'Total Expenditure (£m)' = DIVIDE(SUMX(fact_ie_summary, fact_ie_summary[total_expenditure_000s]), 1000, 0)
+		formatString: £#,0.0m;£-#,0.0m;£0.0m
+		lineageTag: 539af92f-1458-4fd9-b5be-b69ddfdbbeff
+
+	measure 'Operating Surplus (£m)' = DIVIDE(SUMX(fact_ie_summary, fact_ie_summary[operating_surplus_000s]), 1000, 0)
+		formatString: £#,0.0m;£-#,0.0m;£0.0m
+		lineageTag: 792d1194-6f92-43f0-90a0-c68ade6a990f
+
+	measure 'Net Surplus (£m)' = DIVIDE(SUMX(fact_ie_summary, fact_ie_summary[net_surplus_000s]), 1000, 0)
+		formatString: £#,0.0m;£-#,0.0m;£0.0m
+		lineageTag: 2f786f59-158d-4e90-8087-c47ceaa6340a
+
+	measure 'Total Pay (£m)' = DIVIDE(SUMX(fact_expenditure_breakdown, fact_expenditure_breakdown[pay_000s]), 1000, 0)
+		formatString: £#,0.0m;£-#,0.0m;£0.0m
+		lineageTag: db5175be-6fbe-47bb-a903-4132d409b237
+
+	measure 'Total Non-Pay (£m)' = DIVIDE(SUMX(fact_expenditure_breakdown, fact_expenditure_breakdown[non_pay_000s]), 1000, 0)
+		formatString: £#,0.0m;£-#,0.0m;£0.0m
+		lineageTag: 8f9fc9a6-1d50-4299-a769-2acdd1b62321
+
+	measure 'Depreciation & Amortisation (£m)' = DIVIDE(SUMX(fact_expenditure_breakdown, fact_expenditure_breakdown[depreciation_amort_000s]), 1000, 0)
+		formatString: £#,0.0m;£-#,0.0m;£0.0m
+		lineageTag: 6dd41eaa-9ebc-4214-8451-7229eef0acc5
+
+	measure 'Drugs Cost (£m)' = DIVIDE(SUMX(fact_expenditure_breakdown, fact_expenditure_breakdown[drugs_cost_000s]), 1000, 0)
+		formatString: £#,0.0m;£-#,0.0m;£0.0m
+		lineageTag: a9239d84-7bcd-4980-acb0-1b7bb7150368
+
+	measure 'EBITDA (£m)' = DIVIDE(SUMX(fact_kpis, fact_kpis[ebitda_000s]), 1000, 0)
+		formatString: £#,0.0m;£-#,0.0m;£0.0m
+		lineageTag: 0082c134-334b-4863-87b5-ca663e4636e8
+
+	measure 'EBITDA Margin %' = DIVIDE(SUMX(fact_kpis, fact_kpis[ebitda_000s]), SUMX(fact_kpis, fact_kpis[total_income_000s]), BLANK()) * 100
+		formatString: 0.0\%;-0.0\%;0.0\%
+		lineageTag: 288f28a6-4dae-45d2-9607-c441c54f184e
+
+	measure 'Pay % of Income' = DIVIDE(SUMX(fact_kpis, fact_kpis[pay_000s]), SUMX(fact_kpis, fact_kpis[total_income_000s]), BLANK()) * 100
+		formatString: 0.0\%;-0.0\%;0.0\%
+		lineageTag: ff53d382-2528-42eb-9f67-4d2ac2bd952c
+
+	measure 'Net Surplus Margin %' = DIVIDE(SUMX(fact_ie_summary, fact_ie_summary[net_surplus_000s]), SUMX(fact_ie_summary, fact_ie_summary[total_income_000s]), BLANK()) * 100
+		formatString: 0.0\%;-0.0\%;0.0\%
+		lineageTag: 672f7052-2a96-4143-8dbd-fcbf92299be4
+
+	measure 'Deficit Trusts' = COUNTROWS(FILTER(fact_kpis, fact_kpis[operating_surplus_000s] < 0))
+		formatString: 0
+		lineageTag: 819c7ae6-6d3f-47ee-8695-97c0fb87c6dd
+
+	measure 'Surplus Trusts' = COUNTROWS(FILTER(fact_kpis, fact_kpis[operating_surplus_000s] >= 0))
+		formatString: 0
+		lineageTag: f14267bb-576c-4bd9-ac9a-f69950fceab0
+
+	measure 'Total Trusts' = DISTINCTCOUNT(fact_kpis[org_code])
+		formatString: 0
+		lineageTag: 1722cb27-7820-439b-ad12-b0e7bb3ef2eb
+
+	measure 'Deficit %' = DIVIDE([Deficit Trusts], [Total Trusts], BLANK()) * 100
+		formatString: 0.0\%;-0.0\%;0.0\%
+		lineageTag: 4354abc8-5b6e-4940-b8ea-93609c27a462
+
+	measure 'Total WTE' = SUMX(fact_workforce, fact_workforce[total_wte])
+		formatString: 0
+		lineageTag: 6b84b159-38ec-4eed-b0c3-c01fb748f596
+
+	measure 'Total Staff Cost (£m)' = DIVIDE(SUMX(fact_workforce, fact_workforce[total_staff_cost_000s]), 1000, 0)
+		formatString: £#,0.0m;£-#,0.0m;£0.0m
+		lineageTag: 05e23b80-c96c-414d-b2c1-5e7c1c1e0d90
+
+	measure 'Avg Cost per WTE (£000s)' = DIVIDE(SUMX(fact_workforce, fact_workforce[total_staff_cost_000s]), SUMX(fact_workforce, fact_workforce[total_wte]), BLANK())
+		formatString: £#,0.0k;£-#,0.0k;£0.0k
+		lineageTag: 76aa2d44-dcf8-4619-abb3-77250b465e57
+
+	measure 'Medical WTE' = SUMX(fact_workforce, fact_workforce[medical_wte])
+		formatString: 0
+		lineageTag: 3c9caf8d-efe7-4e4b-b710-2f9125684e86
+
+	measure 'Nursing WTE' = SUMX(fact_workforce, fact_workforce[nursing_wte])
+		formatString: 0
+		lineageTag: e93b8a5e-b49a-422b-88fe-1730beb99c63
+
+	measure 'Admin & Estates WTE' = SUMX(fact_workforce, fact_workforce[admin_estates_wte])
+		formatString: 0
+		lineageTag: cb28d31f-ac8c-4619-8144-3aece263fbab
+
+	measure 'Scientific & Tech WTE' = SUMX(fact_workforce, fact_workforce[scientific_tech_wte])
+		formatString: 0
+		lineageTag: 7f6ae3ce-03cf-425a-9b4f-ba59dbcb9ca2
+
+	measure 'Medical % of WTE' = DIVIDE([Medical WTE], [Total WTE], BLANK()) * 100
+		formatString: 0.0\%;-0.0\%;0.0\%
+		lineageTag: db27c379-b018-41d3-b32a-c400ceb0242c
+
+	measure 'Nursing % of WTE' = DIVIDE([Nursing WTE], [Total WTE], BLANK()) * 100
+		formatString: 0.0\%;-0.0\%;0.0\%
+		lineageTag: d0689602-04bb-4166-8da5-5b61f81c8b76
+
+	measure 'Prior Year' = VAR _current = SELECTEDVALUE(dim_financial_year[financial_year]) RETURN SWITCH(_current, "2023/24", "2022/23", "2022/23", "2021/22", "2021/22", "2020/21", BLANK())
+		lineageTag: 02dd6b3c-82e7-413e-9e30-a0fc42517f48
+
+	measure 'Prior Year Income (£m)' = VAR _py = [Prior Year] RETURN IF(NOT ISBLANK(_py), CALCULATE([Total Income (£m)], dim_financial_year[financial_year] = _py), BLANK())
+		formatString: £#,0.0m;£-#,0.0m;£0.0m
+		lineageTag: 283ad676-c5df-4c69-8d57-7d310d7c1ee8
+
+	measure 'Income YoY Growth %' = VAR _cy = [Total Income (£m)] VAR _py = [Prior Year Income (£m)] RETURN IF(NOT ISBLANK(_py), DIVIDE(_cy - _py, _py, BLANK()) * 100, BLANK())
+		formatString: 0.0\%;-0.0\%;0.0\%
+		lineageTag: 4cf3dcf9-1d99-462e-afd4-101fd0660479
+
+	measure 'Prior Year EBITDA Margin %' = VAR _py = [Prior Year] RETURN IF(NOT ISBLANK(_py), CALCULATE([EBITDA Margin %], dim_financial_year[financial_year] = _py), BLANK())
+		formatString: 0.0\%;-0.0\%;0.0\%
+		lineageTag: e1fb99bb-fe7a-4230-80a0-2c37b322bc6d
+
+	measure 'EBITDA Margin YoY pp' = [EBITDA Margin %] - [Prior Year EBITDA Margin %]
+		formatString: 0.0\ pp;-0.0\ pp;0.0\ pp
+		lineageTag: 0ee49ecc-4823-41ef-ae9e-e646f01392fb
+
+	measure 'Prior Year Pay %' = VAR _py = [Prior Year] RETURN IF(NOT ISBLANK(_py), CALCULATE([Pay % of Income], dim_financial_year[financial_year] = _py), BLANK())
+		formatString: 0.0\%;-0.0\%;0.0\%
+		lineageTag: f89f32e0-f197-4e4c-abb3-9482b21e7313
+
+	measure 'Pay % YoY pp' = [Pay % of Income] - [Prior Year Pay %]
+		formatString: 0.0\ pp;-0.0\ pp;0.0\ pp
+		lineageTag: 7e4b4db6-a1fe-4f70-8264-9110764aef85
+
+	measure 'Prior Year Deficit Trusts' = VAR _py = [Prior Year] RETURN IF(NOT ISBLANK(_py), CALCULATE([Deficit Trusts], dim_financial_year[financial_year] = _py), BLANK())
+		formatString: 0
+		lineageTag: dd00fb4a-7649-4fa2-8092-a91a9f5f4a7a
+
+	measure 'Deficit Trusts YoY Change' = [Deficit Trusts] - [Prior Year Deficit Trusts]
+		formatString: 0;-0;0
+		lineageTag: 189e7d1b-24e9-4aa4-9151-e0990b543d21
+
+	measure 'EBITDA RAG' = VAR _margin = [EBITDA Margin %] RETURN SWITCH(TRUE(), ISBLANK(_margin), "Grey", _margin >= 5, "Green", _margin >= 2, "Amber", "Red")
+		lineageTag: 99a40e12-8929-4479-a8b9-b89493e5ab6e
+
+	measure 'Surplus RAG' = VAR _margin = [Net Surplus Margin %] RETURN SWITCH(TRUE(), ISBLANK(_margin), "Grey", _margin >= 0, "Green", _margin >= -2, "Amber", "Red")
+		lineageTag: edee7554-90c5-407a-825c-ae8962f44751
+
+	measure 'Pay RAG' = VAR _pay_pct = [Pay % of Income] RETURN SWITCH(TRUE(), ISBLANK(_pay_pct), "Grey", _pay_pct < 65, "Green", _pay_pct < 70, "Amber", "Red")
+		lineageTag: db9293fc-9a0c-4f91-ba92-332113e53758
+
+	measure 'EBITDA RAG Colour' = SWITCH([EBITDA RAG], "Green", "#009639", "Amber", "#FFB81C", "Red", "#DA291C", "#E8EDEE")
+		lineageTag: 180e87e3-0253-4a59-b053-773842ef6be2
+
+	measure 'Surplus RAG Colour' = SWITCH([Surplus RAG], "Green", "#009639", "Amber", "#FFB81C", "Red", "#DA291C", "#E8EDEE")
+		lineageTag: 513b0735-e646-4072-ad21-7980dd341893
+
+	measure 'Pay RAG Colour' = SWITCH([Pay RAG], "Green", "#009639", "Amber", "#FFB81C", "Red", "#DA291C", "#E8EDEE")
+		lineageTag: 976e8998-9ad7-4d3f-8588-61e8cfc4fc66
+
+	measure 'Selected Year' = SELECTEDVALUE(dim_financial_year[financial_year], "All Years")
+		lineageTag: cd1f0b47-9226-4cf1-9a12-f37d52f1d5d8
+
+	measure 'Selected Sector' = SELECTEDVALUE(dim_trust[sector], "All Sectors")
+		lineageTag: ce0926c8-b06a-45bb-98d9-56e620f80416
+
+	measure 'Selected Region' = SELECTEDVALUE(dim_trust[region], "All Regions")
+		lineageTag: bffef2cc-2e4d-4b60-94c5-130ad1e649a8
+
+	measure 'Page Title - I&E' = "Income & Expenditure - " & [Selected Year] & " | " & [Selected Sector]
+		lineageTag: cb6152d0-3fd9-4228-b302-e2df3e7f7481
+
+	measure 'Surplus Label' = VAR _val = [Operating Surplus (£m)] RETURN IF(_val >= 0, "£" & FORMAT(_val, "0.0") & "m surplus", "£" & FORMAT(ABS(_val), "0.0") & "m deficit")
+		lineageTag: c90f54f9-6ba7-49ce-94db-3ae437cc66b5
+
+	measure 'EBITDA Label' = FORMAT([EBITDA Margin %], "0.0") & "% EBITDA margin"
+		lineageTag: 7f91c137-2032-49d2-98d1-79ac14df745d
+
+	measure 'Deficit Count Label' = FORMAT([Deficit Trusts], "0") & " of " & FORMAT([Total Trusts], "0") & " trusts in deficit"
+		lineageTag: 56a15f39-79d9-4441-a84f-904ac1f2ba21
+
+	measure 'Sector Benchmark EBITDA %' = AVERAGEX(VALUES(fact_sector_benchmarks[sector]), CALCULATE(AVERAGE(fact_sector_benchmarks[avg_ebitda_margin_pct])))
+		formatString: 0.0\%;-0.0\%;0.0\%
+		lineageTag: 00f552a2-2ea4-4291-a08c-85e2957e8cc2
+
+	measure 'EBITDA vs Sector Benchmark pp' = [EBITDA Margin %] - [Sector Benchmark EBITDA %]
+		formatString: 0.0\ pp;-0.0\ pp;0.0\ pp
+		lineageTag: c572d03f-cfee-4210-9d80-5468d71b5591
+
+	column 'Measure Placeholder'
+		lineageTag: fe223266-9d5f-4019-ac70-2624aa0990e8
+		isNameInferred
+		sourceColumn: [Measure Placeholder]
+
+	partition _Measures = calculated
+		mode: import
+		source = ROW("Measure Placeholder", BLANK())

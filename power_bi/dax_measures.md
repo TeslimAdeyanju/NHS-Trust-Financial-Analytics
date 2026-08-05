@@ -1,8 +1,16 @@
 # DAX Measures — NHS Finance Analytics Dashboard
 
-All measures belong in a dedicated **Measures** table (Enter Data → blank table → name "Measures").
-Follow the naming conventions in `power_bi/CLAUDE.md`: Title Case, `%` suffix for percentages,
-`£m` suffix for millions, `£000s` suffix where values remain in thousands.
+All 51 measures live in a dedicated **`_Measures`** table (Enter Data → blank table → name `_Measures`) —
+never inside a fact table. Follow the naming conventions in `power_bi/CLAUDE.md`: Title Case, `%` suffix
+for percentages, `(£m)` suffix for millions, `(£000s)` suffix where values remain in thousands.
+
+Table names below use the `fact_`/`dim_` prefixes Power BI's model view assigns once each CSV from
+`data/processed/powerbi_export/` is imported as its own table — see `power_bi/setup_guide.md` for the full
+import and relationship steps.
+
+This file is the human-readable reference. The exact, machine-exported definition of every measure —
+including format strings and lineage tags — lives at
+[`power_bi/dax/_Measures.tmdl`](dax/_Measures.tmdl); if the two ever disagree, the `.tmdl` file is correct.
 
 ---
 
@@ -21,83 +29,80 @@ Follow the naming conventions in `power_bi/CLAUDE.md`: Title Case, `%` suffix fo
 ## 1. Core I&E Measures
 
 ```dax
-Total Income £m =
+Total Income (£m) =
 DIVIDE(
-    SUMX( ie_summary, ie_summary[total_income_000s] ),
+    SUMX( fact_ie_summary, fact_ie_summary[total_income_000s] ),
     1000,
     0
 )
 
-Patient Care Income £m =
+Patient Care Income (£m) =
 DIVIDE(
-    SUMX( ie_summary, ie_summary[patient_care_income_000s] ),
+    SUMX( fact_ie_summary, fact_ie_summary[patient_care_income_000s] ),
     1000,
     0
 )
 
-Other Income £m =
+Other Income (£m) =
 DIVIDE(
-    SUMX( ie_summary, ie_summary[other_income_000s] ),
+    SUMX( fact_ie_summary, fact_ie_summary[other_income_000s] ),
     1000,
     0
 )
 
-Total Expenditure £m =
+Total Expenditure (£m) =
 DIVIDE(
-    SUMX( ie_summary, ie_summary[total_expenditure_000s] ),
+    SUMX( fact_ie_summary, fact_ie_summary[total_expenditure_000s] ),
     1000,
     0
 )
 
-Operating Surplus £m =
+Operating Surplus (£m) =
 DIVIDE(
-    SUMX( ie_summary, ie_summary[operating_surplus_000s] ),
+    SUMX( fact_ie_summary, fact_ie_summary[operating_surplus_000s] ),
     1000,
     0
 )
 
-Net Surplus £m =
+Net Surplus (£m) =
 DIVIDE(
-    SUMX( ie_summary, ie_summary[net_surplus_000s] ),
+    SUMX( fact_ie_summary, fact_ie_summary[net_surplus_000s] ),
     1000,
     0
 )
 
-Total Pay £m =
+Total Pay (£m) =
 DIVIDE(
-    SUMX( expenditure_breakdown, expenditure_breakdown[pay_000s] ),
+    SUMX( fact_expenditure_breakdown, fact_expenditure_breakdown[pay_000s] ),
     1000,
     0
 )
 
-Total Non-Pay £m =
+Total Non-Pay (£m) =
 DIVIDE(
-    SUMX( expenditure_breakdown, expenditure_breakdown[non_pay_000s] ),
+    SUMX( fact_expenditure_breakdown, fact_expenditure_breakdown[non_pay_000s] ),
     1000,
     0
 )
 
-Depreciation & Amortisation £m =
+Depreciation & Amortisation (£m) =
 DIVIDE(
-    SUMX( expenditure_breakdown, expenditure_breakdown[depreciation_amort_000s] ),
+    SUMX( fact_expenditure_breakdown, fact_expenditure_breakdown[depreciation_amort_000s] ),
     1000,
     0
 )
 
-Drugs Cost £m =
+Drugs Cost (£m) =
 DIVIDE(
-    SUMX( expenditure_breakdown, expenditure_breakdown[drugs_cost_000s] ),
-    1000,
-    0
-)
-
-Clinical Negligence £m =
-DIVIDE(
-    SUMX( expenditure_breakdown, expenditure_breakdown[clinical_negligence_000s] ),
+    SUMX( fact_expenditure_breakdown, fact_expenditure_breakdown[drugs_cost_000s] ),
     1000,
     0
 )
 ```
+
+*No `Clinical Negligence £m` measure — `fact_expenditure_breakdown` (from `v_expenditure_breakdown`) has no
+`clinical_negligence_000s` column. The SQL view was never extended to break that line out separately, so
+clinical negligence stays folded into `non_pay_000s`.*
 
 ---
 
@@ -106,9 +111,9 @@ DIVIDE(
 ```dax
 -- ── EBITDA ────────────────────────────────────────────────────────────────
 
-EBITDA £m =
+EBITDA (£m) =
 DIVIDE(
-    SUMX( kpis, kpis[ebitda_000s] ),
+    SUMX( fact_kpis, fact_kpis[ebitda_000s] ),
     1000,
     0
 )
@@ -116,8 +121,8 @@ DIVIDE(
 EBITDA Margin % =
 -- Weighted sector EBITDA margin (not average of averages)
 DIVIDE(
-    SUMX( kpis, kpis[ebitda_000s] ),
-    SUMX( kpis, kpis[total_income_000s] ),
+    SUMX( fact_kpis, fact_kpis[ebitda_000s] ),
+    SUMX( fact_kpis, fact_kpis[total_income_000s] ),
     BLANK()
 ) * 100
 
@@ -125,8 +130,8 @@ DIVIDE(
 
 Pay % of Income =
 DIVIDE(
-    SUMX( kpis, kpis[pay_000s] ),
-    SUMX( kpis, kpis[total_income_000s] ),
+    SUMX( fact_kpis, fact_kpis[pay_000s] ),
+    SUMX( fact_kpis, fact_kpis[total_income_000s] ),
     BLANK()
 ) * 100
 
@@ -134,8 +139,8 @@ DIVIDE(
 
 Net Surplus Margin % =
 DIVIDE(
-    SUMX( ie_summary, ie_summary[net_surplus_000s] ),
-    SUMX( ie_summary, ie_summary[total_income_000s] ),
+    SUMX( fact_ie_summary, fact_ie_summary[net_surplus_000s] ),
+    SUMX( fact_ie_summary, fact_ie_summary[total_income_000s] ),
     BLANK()
 ) * 100
 
@@ -143,16 +148,16 @@ DIVIDE(
 
 Deficit Trusts =
 COUNTROWS(
-    FILTER( kpis, kpis[operating_surplus_000s] < 0 )
+    FILTER( fact_kpis, fact_kpis[operating_surplus_000s] < 0 )
 )
 
 Surplus Trusts =
 COUNTROWS(
-    FILTER( kpis, kpis[operating_surplus_000s] >= 0 )
+    FILTER( fact_kpis, fact_kpis[operating_surplus_000s] >= 0 )
 )
 
 Total Trusts =
-DISTINCTCOUNT( kpis[org_code] )
+DISTINCTCOUNT( fact_kpis[org_code] )
 
 Deficit % =
 DIVIDE( [Deficit Trusts], [Total Trusts], BLANK() ) * 100
@@ -164,27 +169,33 @@ DIVIDE( [Deficit Trusts], [Total Trusts], BLANK() ) * 100
 
 ```dax
 Total WTE =
-SUMX( workforce, workforce[total_wte] )
+SUMX( fact_workforce, fact_workforce[total_wte] )
 
-Total Staff Cost £m =
+Total Staff Cost (£m) =
 DIVIDE(
-    SUMX( workforce, workforce[total_staff_cost_000s] ),
+    SUMX( fact_workforce, fact_workforce[total_staff_cost_000s] ),
     1000,
     0
 )
 
-Avg Cost per WTE £000s =
+Avg Cost per WTE (£000s) =
 DIVIDE(
-    SUMX( workforce, workforce[total_staff_cost_000s] ),
-    SUMX( workforce, workforce[total_wte] ),
+    SUMX( fact_workforce, fact_workforce[total_staff_cost_000s] ),
+    SUMX( fact_workforce, fact_workforce[total_wte] ),
     BLANK()
 )
 
 Medical WTE =
-SUMX( workforce, workforce[medical_wte] )
+SUMX( fact_workforce, fact_workforce[medical_wte] )
 
 Nursing WTE =
-SUMX( workforce, workforce[nursing_wte] )
+SUMX( fact_workforce, fact_workforce[nursing_wte] )
+
+Admin & Estates WTE =
+SUMX( fact_workforce, fact_workforce[admin_estates_wte] )
+
+Scientific & Tech WTE =
+SUMX( fact_workforce, fact_workforce[scientific_tech_wte] )
 
 Medical % of WTE =
 DIVIDE( [Medical WTE], [Total WTE], BLANK() ) * 100
@@ -211,21 +222,21 @@ RETURN
         BLANK()
     )
 
-Prior Year Income £m =
+Prior Year Income (£m) =
 VAR _py = [Prior Year]
 RETURN
     IF(
         NOT ISBLANK( _py ),
         CALCULATE(
-            [Total Income £m],
+            [Total Income (£m)],
             dim_financial_year[financial_year] = _py
         ),
         BLANK()
     )
 
 Income YoY Growth % =
-VAR _cy = [Total Income £m]
-VAR _py = [Prior Year Income £m]
+VAR _cy = [Total Income (£m)]
+VAR _py = [Prior Year Income (£m)]
 RETURN IF( NOT ISBLANK( _py ), DIVIDE( _cy - _py, _py, BLANK() ) * 100, BLANK() )
 
 Prior Year EBITDA Margin % =
@@ -336,6 +347,15 @@ SWITCH(
     "Red",   "#DA291C",
     "#E8EDEE"
 )
+
+Pay RAG Colour =
+SWITCH(
+    [Pay RAG],
+    "Green", "#009639",
+    "Amber", "#FFB81C",
+    "Red",   "#DA291C",
+    "#E8EDEE"
+)
 ```
 
 ---
@@ -344,23 +364,14 @@ SWITCH(
 
 ```dax
 -- Sector average EBITDA margin — for use in scatter plot reference line or tooltip
--- Requires sector_benchmarks table in the model
+-- Requires fact_sector_benchmarks table in the model
+-- Uses the pre-aggregated avg_ebitda_margin_pct column already computed in v_kpis / sector_benchmarks.csv,
+-- rather than re-deriving it from raw totals
 
-Sector Avg EBITDA Margin % =
-CALCULATE(
-    DIVIDE(
-        SUMX( sector_benchmarks, sector_benchmarks[total_surplus_000s]
-              + sector_benchmarks[total_surplus_000s] ),  -- placeholder; use pre-calc column
-        SUMX( sector_benchmarks, sector_benchmarks[total_income_000s] ),
-        BLANK()
-    ) * 100
-)
-
--- Simpler: use the pre-aggregated column from sector_benchmarks.csv
 Sector Benchmark EBITDA % =
 AVERAGEX(
-    VALUES( sector_benchmarks[sector] ),
-    CALCULATE( AVERAGE( sector_benchmarks[avg_ebitda_margin_pct] ) )
+    VALUES( fact_sector_benchmarks[sector] ),
+    CALCULATE( AVERAGE( fact_sector_benchmarks[avg_ebitda_margin_pct] ) )
 )
 
 -- EBITDA vs sector benchmark (for KPI variance visual)
@@ -384,11 +395,11 @@ SELECTEDVALUE( dim_trust[sector], "All Sectors" )
 Selected Region =
 SELECTEDVALUE( dim_trust[region], "All Regions" )
 
-Page Title — I&E =
-"Income & Expenditure — " & [Selected Year] & " | " & [Selected Sector]
+Page Title - I&E =
+"Income & Expenditure - " & [Selected Year] & " | " & [Selected Sector]
 
 Surplus Label =
-VAR _val = [Operating Surplus £m]
+VAR _val = [Operating Surplus (£m)]
 RETURN
     IF(
         _val >= 0,
