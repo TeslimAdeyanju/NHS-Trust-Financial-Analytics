@@ -11,7 +11,38 @@ An end-to-end financial analytics pipeline using **real NHS England Trust Accoun
 
 It models the work of an NHS Trust finance analytics function: ingesting annual accounts data, computing sector KPIs against NHS FReM conventions, and producing board-ready outputs in Power BI.
 
-Full technical documentation: [PROJECT_DOCUMENTATION.md](PROJECT_DOCUMENTATION.md)
+**Why it exists:** NHS England already publishes this data — it just doesn't publish it in usable form. TAC data is released as six separate Excel workbooks a year, in a long/narrow SubCode format designed for archival completeness, not analysis. There is no consolidated, multi-year, trust-level view anywhere in the public data as published. Building one means combining six files across three years, resolving inconsistent formats between them, and pivoting a SubCode taxonomy that isn't self-explanatory without a data dictionary — and the numbers it surfaces describe a sector in genuine distress (see [Key findings](#key-findings) below).
+
+**Objectives:**
+
+1. Ingest and consolidate three years of published TAC data — six workbooks, 206 NHS organisations — into a single, queryable data warehouse
+2. Build a reusable, idempotent pipeline that can absorb a new year's data without manual rework or risk of duplication
+3. Compute the core NHS financial KPIs against NHS England's own published RAG thresholds, not an invented scoring system
+4. Keep the data model auditable — every figure traceable back to the exact source file, TAC schedule, and SubCode it came from
+5. Deliver the result as an interactive dashboard usable by a non-technical audience — a finance director or board — not just query output for another analyst
+
+Full technical documentation, including the full business case, methodology, and stage-by-stage build notes: [PROJECT_DOCUMENTATION.md](PROJECT_DOCUMENTATION.md)
+
+---
+
+## The six-stage pipeline
+
+Data moves in one direction only — source to dashboard — with each stage owned by a different technology:
+
+<p align="center">
+<img src="docs/images/pipeline_architecture.png" width="480" alt="Six-stage pipeline architecture: NHS England source files are manually downloaded into data/raw/, ingested by load_tac_data.py into MySQL staging (nhs_stg), joined and upserted into MySQL analytics (nhs_finance) as a star schema with SQL views, exported by export_for_powerbi.py to CSV, and imported into the Power BI dashboard." />
+</p>
+
+| Stage | What it does |
+|-------|--------------|
+| ① NHS England (source) | NHS England's annual TAC publication — audited Trust accounts, consolidated and published as public data |
+| ② Raw Excel files | Six workbooks (~170MB) downloaded manually into `data/raw/` — a fixed, reproducible snapshot |
+| ③ MySQL staging (`nhs_stg`) | `load_tac_data.py` lands the data close to verbatim — minimal transformation, full auditability |
+| ④ MySQL analytics (`nhs_finance`) | Staging data resolved to ODS codes and upserted into a star schema; SQL views pivot SubCodes into KPI-ready tables |
+| ⑤ CSV exports | `export_for_powerbi.py` writes 9 flat CSVs — portable, no database connection required |
+| ⑥ Power BI dashboard | 5-page interactive report — the only stage a non-technical end user actually interacts with |
+
+Full detail on each stage — including the schema, SQL, and design rationale — is in [PROJECT_DOCUMENTATION.md](PROJECT_DOCUMENTATION.md).
 
 ---
 
@@ -123,12 +154,14 @@ Two MySQL databases:
 │   ├── dax_measures.md           # All 51 measures, human-readable
 │   └── dax/_Measures.tmdl        # Exact Power BI Desktop export
 │
-└── reports/
-    └── nhs_sector_financial_review_2324.md  # Annual sector outturn narrative
+├── reports/
+│   └── nhs_sector_financial_review_2324.md  # Annual sector outturn narrative
+│
+└── notebook/                     # Stage-by-stage build notes kept while developing the pipeline
+    └── stage_01…06_*.md          # One file per pipeline stage, ① through ⑥
 ```
 
-Full tree, including every `CLAUDE.md` and `notebook/`, is in `PROJECT_DOCUMENTATION.md` under
-"Repository Structure".
+Full tree, including every `CLAUDE.md`, is in `PROJECT_DOCUMENTATION.md` under "Repository Structure".
 
 ---
 

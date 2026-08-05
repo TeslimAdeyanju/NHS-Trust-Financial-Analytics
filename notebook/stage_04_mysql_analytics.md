@@ -104,16 +104,9 @@ counts both times.
 
 ## The Star Schema
 
-```text
-              dim_financial_year (5 rows, seeded)
-                     │ FK: financial_year
-                     │
-dim_worksheet ───────┼──── fct_tac ──── dim_trust
-(30 rows: 19 seeded  │  (2,179,740      (215 rows)
- + 11 self-healed)   │   rows)
-                     │
-                   (dim_subcode, 59 rows, seeded — joined via sub_code, no FK)
-```
+<p align="center">
+<img src="../docs/images/star_schema.png" width="560" alt="Entity relationship diagram from DbVisualizer: fct_tac has three enforced foreign keys — org_code (to dim_trust), financial_year (to dim_financial_year), and worksheet_name (to dim_worksheet). dim_subcode.worksheet_name also has its own foreign key to dim_worksheet.worksheet_name. sub_code on fct_tac remains unconstrained by design, joining to dim_subcode." />
+</p>
 
 `fct_tac` is the centre — one row per `(org_code, financial_year, main_code, sub_code)`. Three enforced
 foreign keys: `org_code → dim_trust`, `financial_year → dim_financial_year`, `worksheet_name →
