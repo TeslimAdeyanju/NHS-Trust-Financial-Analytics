@@ -1100,7 +1100,7 @@ Python dependencies: `pandas`, `sqlalchemy`, `pymysql`, `openpyxl` — installed
 ## REPOSITORY STRUCTURE
 
 ```text
-nhs-finance-warehouse/
+portfolio-01-nhs-trust-financial-analytics/
 │
 ├── README.md                          ← Quick-start summary
 ├── PROJECT_DOCUMENTATION.md           ← This file
