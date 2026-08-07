@@ -71,7 +71,7 @@ This project applies real NHS finance conventions throughout:
 | NHS period labels | M01 (April) → M12 (March); financial year not calendar year |
 | ODS organisation codes | 3-character provider codes (`org_code`) across all dimensions |
 | Agenda for Change pay context | Pay as % of income KPI; WTE cost benchmarking |
-| EBITDA margin RAG thresholds | ≥2% Green · 0–2% Amber · <0% Red (NHS England standard) |
+| EBITDA margin RAG thresholds | ≥5% Green · 2–5% Amber · <2% Red (NHS England standard) |
 | Financial year labelling | `YYYY/YY` (e.g. `2023/24`); no calendar-month grain — TAC is an annual return |
 
 ---
