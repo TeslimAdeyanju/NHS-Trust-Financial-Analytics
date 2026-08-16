@@ -39,7 +39,7 @@ Data moves in one direction only — source to dashboard — with each stage own
 | ② Raw Excel files | Six workbooks (~170MB) downloaded manually into `data/raw/` — a fixed, reproducible snapshot |
 | ③ MySQL staging (`nhs_bronze`) | `load_tac_data.py` lands the data close to verbatim — minimal transformation, full auditability |
 | ④ MySQL analytics (`nhs_silver` → `nhs_gold`) | Staging data resolved to ODS codes and upserted into a star schema (`nhs_silver`); SQL views in `nhs_gold` pivot SubCodes into KPI-ready and full statutory P&L/Balance Sheet tables |
-| ⑤ CSV exports | `export_for_powerbi.py` writes 9 flat CSVs — portable, no database connection required |
+| ⑤ CSV exports | `export_for_powerbi.py` writes 11 flat CSVs — portable, no database connection required |
 | ⑥ Power BI dashboard | 5-page interactive report — the only stage a non-technical end user actually interacts with |
 
 Full detail on each stage — including the schema, SQL, and design rationale — is in [PROJECT_DOCUMENTATION.md](PROJECT_DOCUMENTATION.md).
