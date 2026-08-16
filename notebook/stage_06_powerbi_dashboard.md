@@ -1,6 +1,6 @@
 # Stage ⑥ — Power BI Dashboard
 
-> Imports the nine CSVs from [stage ⑤](stage_05_csv_exports.md) (or connects directly to
+> Imports the eleven CSVs from [stage ⑤](stage_05_csv_exports.md) (or connects directly to
 > [stage ④](stage_04_mysql_analytics.md) via DirectQuery), builds the model relationships and DAX
 > measures below, and renders five report pages. This is the only stage a non-technical end user — a
 > finance director, a board — actually interacts with; there is no code to run here, only a model to
@@ -24,10 +24,17 @@ convention Power BI's own model view then displays:
 | `kpis.csv` | `fact_kpis` |
 | `income_detail.csv` | `fact_income_detail` |
 | `expenditure_detail.csv` | `fact_expenditure_detail` |
+| `profit_and_loss.csv` | `fact_profit_and_loss` |
+| `balance_sheet.csv` | `fact_balance_sheet` |
 | `sector_benchmarks.csv` | `fact_sector_benchmarks` |
 
 Plus one table that isn't a CSV at all: **`_Measures`**, created via *Enter Data → blank table*, holding
 none of the data — only DAX measures, so they have a home not tied to any one fact table.
+
+`fact_profit_and_loss` and `fact_balance_sheet` are the two newest tables — the full statutory P&L and
+Balance Sheet from [stage ⑤](stage_05_csv_exports.md) — imported and related the same way as every other
+fact table below. No dedicated report page consumes them yet; that's separate, future work. Until then
+they're available for ad-hoc visuals or drillthrough on the existing pages.
 
 ---
 
@@ -43,12 +50,14 @@ fact_workforce[org_code / financial_year]                → dim_trust / dim_fin
 fact_kpis[org_code / financial_year]                     → dim_trust / dim_financial_year
 fact_income_detail[org_code / financial_year]            → dim_trust / dim_financial_year
 fact_expenditure_detail[org_code / financial_year]       → dim_trust / dim_financial_year
+fact_profit_and_loss[org_code / financial_year]          → dim_trust / dim_financial_year
+fact_balance_sheet[org_code / financial_year]            → dim_trust / dim_financial_year
 fact_sector_benchmarks[financial_year]                   → dim_financial_year   (no dim_trust — see below)
 ```
 
 `fact_sector_benchmarks` has no relationship to `dim_trust`: it was built pre-aggregated by
 `(sector, trust_type)` in [stage ⑤](stage_05_csv_exports.md)'s SQL, so it has no `org_code` column to join
-on — `sector` and `trust_type` stay unmodelled attributes on the table itself. Full seven-fact star
+on — `sector` and `trust_type` stay unmodelled attributes on the table itself. Full nine-fact star
 diagram, re-exported from Power BI's own model view, is in `PROJECT_DOCUMENTATION.md`, stage ⑤.
 
 ---

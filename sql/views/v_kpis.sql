@@ -18,7 +18,7 @@
 --   ebitda_rag  — Green ≥5% | Amber 2–5% | Red <2%  (NHS England standard)
 --   surplus_rag — Green ≥0% | Amber -2–0% | Red <-2%
 
-USE nhs_finance;
+USE nhs_gold;
 
 DROP VIEW IF EXISTS v_kpis;
 CREATE VIEW v_kpis AS

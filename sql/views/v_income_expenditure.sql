@@ -10,7 +10,7 @@
 --   SCI0140A  Operating surplus / (deficit)
 --   SCI0240   Surplus / (deficit) for the year (net, after finance lines and PDC)
 
-USE nhs_finance;
+USE nhs_gold;
 
 DROP VIEW IF EXISTS v_income_expenditure;
 CREATE VIEW v_income_expenditure AS
@@ -44,8 +44,8 @@ SELECT
     MAX(CASE WHEN f.sub_code = 'SCI0240' THEN f.total_000s END)
         AS net_surplus_000s
 
-FROM fct_tac f
-JOIN dim_trust t ON f.org_code = t.org_code
+FROM nhs_silver.fct_tac f
+JOIN nhs_silver.dim_trust t ON f.org_code = t.org_code
 WHERE f.worksheet_name = 'TAC02 SoCI'
 GROUP BY
     t.org_code,

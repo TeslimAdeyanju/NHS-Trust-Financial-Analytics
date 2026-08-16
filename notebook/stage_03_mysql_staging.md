@@ -1,6 +1,6 @@
 # Stage ③ — MySQL Staging
 
-> `nhs_stg` — populated by `python/ingestion/load_tac_data.py`. This stage's only job is to get the
+> `nhs_bronze` — populated by `python/ingestion/load_tac_data.py`. This stage's only job is to get the
 > Excel data into a queryable form with the *minimum* transformation applied. No joins, no pivoting, no
 > business logic — a faithful, query-able landing zone for exactly what NHS England published.
 
@@ -8,21 +8,27 @@
 
 ## Why a Separate Staging Database
 
+The project uses a three-database **medallion** split — Bronze (raw landing), Silver (conformed dims/fact,
+see [stage ④](stage_04_mysql_analytics.md)), Gold (curated analytical views, also stage ④):
+
 ```sql
-CREATE DATABASE IF NOT EXISTS nhs_stg;     -- staging (buffer)
-CREATE DATABASE IF NOT EXISTS nhs_finance; -- analytics (source of truth) — see stage ④
+CREATE DATABASE IF NOT EXISTS nhs_bronze; -- staging (buffer) — this stage
+CREATE DATABASE IF NOT EXISTS nhs_silver; -- conformed dims + fact — see stage ④
+CREATE DATABASE IF NOT EXISTS nhs_gold;   -- analytical views — see stage ④
 ```
 
-| `nhs_stg`                                | `nhs_finance`                                |
+| `nhs_bronze`                                 | `nhs_silver` / `nhs_gold`                         |
 |---------------------------------------------|--------------------------------------------------|
-| Holds data exactly as it arrived            | Holds cleaned, conformed analytics data          |
+| Holds data exactly as it arrived            | Holds cleaned, conformed analytics data + views  |
 | Safe to delete-and-reload at any time       | Never truncated — accumulates across all six files |
 | No foreign keys — accepts anything           | Has foreign keys — enforces integrity            |
 | Used only during ingestion                   | Used by views, exports, Power BI                 |
 
-If a load looks wrong, `nhs_stg` tells you whether the fault is in what NHS England published or in the
-transformation logic that runs next — without needing to touch the analytics layer Power BI is reading
-from.
+If a load looks wrong, `nhs_bronze` tells you whether the fault is in what NHS England published or in the
+transformation logic that runs next — without needing to touch the analytics layers Power BI is reading
+from. `nhs_gold`'s views are a separate database from the `nhs_silver` tables they read, so every view's
+`FROM`/`JOIN` fully-qualifies its source (`FROM nhs_silver.fct_tac`) — MySQL views can query another
+database on the same server natively, no cross-database tricks required.
 
 ---
 
@@ -98,7 +104,7 @@ Two severity levels, three checks:
 
 ---
 
-## `load_staging()` — Write to `nhs_stg`
+## `load_staging()` — Write to `nhs_bronze`
 
 ```python
 # DELETE existing data for this year/type first (idempotent)
@@ -147,7 +153,9 @@ CREATE TABLE stg_tac_raw (
 
 `stg_provider_list` is the same idea for the "List of Providers" sheet — a temporary, per-file lookup
 (~639 rows across all six files combined) that stage ④'s join uses to resolve `organisation_name →
-org_code`. Once that join runs, its job is done for that file.
+org_code`. Once that join runs, its job is done for that file. It carries a `trust_type` column
+(`NHS_TRUST` | `FOUNDATION_TRUST`) alongside `financial_year`, so the join in stage ④ can match a name
+within the same year *and* file type.
 
 ---
 
@@ -155,7 +163,7 @@ org_code`. Once that join runs, its job is done for that file.
 
 | Concept | Design Decision | Why |
 |---------|------------------|-----|
-| Two databases | `nhs_stg` buffer + `nhs_finance` analytics | Separates raw from clean; staging is safe to reload |
+| Three databases | `nhs_bronze` buffer + `nhs_silver` conformed + `nhs_gold` views | Separates raw, clean, and curated; staging is safe to reload |
 | `float` dtype for `Total` | NaN-safe read, cast to `int64` after filtering | `NaN` cannot exist in an integer column |
 | CY filter | Drop rows where `main_code` contains `"PY"` | Prevents double-counting across six files |
 | Validate before write | Critical → halt; Warning → log and continue | Catch unrecoverable problems before any row lands |

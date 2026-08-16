@@ -4,7 +4,7 @@
 -- Use for Power BI DirectQuery or as source for CSV export
 -- All monetary values in £000s
 
-USE nhs_finance;
+USE nhs_gold;
 
 DROP VIEW IF EXISTS v_trust_annual_scorecard;
 CREATE VIEW v_trust_annual_scorecard AS
@@ -86,7 +86,7 @@ LEFT JOIN v_expenditure_breakdown ex
     ON k.org_code = ex.org_code AND k.financial_year = ex.financial_year
 LEFT JOIN v_workforce wf
     ON k.org_code = wf.org_code AND k.financial_year = wf.financial_year
-LEFT JOIN fct_tac f
+LEFT JOIN nhs_silver.fct_tac f
     ON k.org_code = f.org_code AND k.financial_year = f.financial_year
     AND f.sub_code IN (
         'INC0197','INC0198','INC0200','INC0330','INC0350',

@@ -2,7 +2,7 @@
 load_tac_data.py
 ----------------
 Ingests NHS England TAC (Trust Accounts Consolidation) Excel files
-into MySQL databases nhs_stg (staging) and nhs_finance (fact table).
+into MySQL databases nhs_bronze (staging) and nhs_silver (conformed dims/fact table).
 
 Usage:
     python python/ingestion/load_tac_data.py
@@ -33,8 +33,8 @@ DB_PASSWORD = "Password1234"
 DB_HOST     = "127.0.0.1"
 DB_PORT     = 3306
 
-STG_DB      = "nhs_stg"
-FACT_DB     = "nhs_finance"
+STG_DB      = "nhs_bronze"
+SILVER_DB   = "nhs_silver"
 
 RAW_DIR       = Path("data/raw")
 PROCESSED_DIR = Path("data/processed")
@@ -82,12 +82,15 @@ def read_provider_list(path: Path, source_file: str, financial_year: str) -> pd.
         "Sector":                "sector",
         "Comments ":             "comments",
     })
+    
     # Handle column name with/without trailing space
     if "Comments" in df.columns and "comments" not in df.columns:
         df = df.rename(columns={"Comments": "comments"})
 
+    # removing trailing spaces from column names
     keep = ["organisation_name", "org_code", "region", "sector", "comments"]
     df = df[[c for c in keep if c in df.columns]].copy()
+    
     df["org_code"]          = df["org_code"].astype(str).str.strip()
     df["organisation_name"] = df["organisation_name"].astype(str).str.strip()
     df["source_file"]       = source_file
@@ -210,15 +213,15 @@ def load_staging(data_df: pd.DataFrame, provider_df: pd.DataFrame,
 
     provider_df["trust_type"] = trust_type
     provider_df.to_sql("stg_provider_list", engine, if_exists="append", index=False, chunksize=500)
-    log.info("  Loaded %d rows → nhs_stg.stg_provider_list", len(provider_df))
+    log.info("  Loaded %d rows → nhs_bronze.stg_provider_list", len(provider_df))
 
     data_df.to_sql("stg_tac_raw", engine, if_exists="append", index=False, chunksize=2000)
-    log.info("  Loaded %d rows → nhs_stg.stg_tac_raw", len(data_df))
+    log.info("  Loaded %d rows → nhs_bronze.stg_tac_raw", len(data_df))
 
 
 def populate_dim_trust(financial_year: str) -> None:
-    stg_engine  = get_engine(STG_DB)
-    fact_engine = get_engine(FACT_DB)
+    stg_engine    = get_engine(STG_DB)
+    silver_engine = get_engine(SILVER_DB)
 
     providers = pd.read_sql(
         "SELECT DISTINCT org_code, organisation_name, sector, region, source_file, financial_year "
@@ -248,7 +251,7 @@ def populate_dim_trust(financial_year: str) -> None:
             updated_ts       = CURRENT_TIMESTAMP
     """)
 
-    with fact_engine.begin() as conn:
+    with silver_engine.begin() as conn:
         for _, row in providers.iterrows():
             conn.execute(upsert_sql, {
                 "org_code":          row["org_code"],
@@ -260,13 +263,13 @@ def populate_dim_trust(financial_year: str) -> None:
                 "financial_year":    financial_year,
             })
 
-    log.info("  Upserted %d rows → nhs_finance.dim_trust", len(providers))
+    log.info("  Upserted %d rows → nhs_silver.dim_trust", len(providers))
 
 
 def promote_to_fact(financial_year: str, trust_type: str) -> None:
     """Join staging data with provider list to get org_code, then upsert into fct_tac."""
-    stg_engine  = get_engine(STG_DB)
-    fact_engine = get_engine(FACT_DB)
+    stg_engine    = get_engine(STG_DB)
+    silver_engine = get_engine(SILVER_DB)
 
     log.info("  Promoting to fct_tac (year=%s, type=%s)...", financial_year, trust_type)
 
@@ -275,7 +278,7 @@ def promote_to_fact(financial_year: str, trust_type: str) -> None:
         "SELECT DISTINCT worksheet_name FROM stg_tac_raw WHERE financial_year = %(fy)s AND trust_type = %(tt)s",
         stg_engine, params={"fy": financial_year, "tt": trust_type}
     )
-    with fact_engine.begin() as conn:
+    with silver_engine.begin() as conn:
         for ws_name in stg_sheets["worksheet_name"]:
             conn.execute(text("""
                 INSERT IGNORE INTO dim_worksheet (worksheet_name, schedule_title, category)
@@ -325,13 +328,13 @@ def promote_to_fact(financial_year: str, trust_type: str) -> None:
 
     chunk_size = 1000
     total_rows = 0
-    with fact_engine.begin() as conn:
+    with silver_engine.begin() as conn:
         for start in range(0, len(fact_df), chunk_size):
             chunk = fact_df.iloc[start: start + chunk_size]
             conn.execute(upsert_sql, chunk.to_dict(orient="records"))
             total_rows += len(chunk)
 
-    log.info("  Upserted %d rows → nhs_finance.fct_tac", total_rows)
+    log.info("  Upserted %d rows → nhs_silver.fct_tac", total_rows)
 
 
 # ── Main ───────────────────────────────────────────────────────────────────
@@ -378,7 +381,7 @@ def main():
             raise
 
     # Final counts
-    engine = get_engine(FACT_DB)
+    engine = get_engine(SILVER_DB)
     with engine.connect() as conn:
         facts  = conn.execute(text("SELECT COUNT(*) FROM fct_tac")).scalar()
         trusts = conn.execute(text("SELECT COUNT(*) FROM dim_trust")).scalar()

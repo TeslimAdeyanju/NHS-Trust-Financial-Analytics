@@ -12,6 +12,8 @@ Output files written to data/processed/powerbi_export/:
     kpis.csv                 -- v_kpis (pre-computed KPIs)
     income_detail.csv        -- patient care income subcodes
     expenditure_detail.csv   -- operating expenditure subcodes
+    profit_and_loss.csv      -- v_profit_and_loss (full statutory SoCI/SOC detail)
+    balance_sheet.csv        -- v_balance_sheet (full statutory SoFP detail)
 
 Usage:
     python python/reporting/export_for_powerbi.py
@@ -36,13 +38,13 @@ DB_USER     = "root"
 DB_PASSWORD = "Password1234"
 DB_HOST     = "127.0.0.1"
 DB_PORT     = 3306
-FACT_DB     = "nhs_finance"
+GOLD_DB     = "nhs_gold"   # views live here; nhs_silver.* is qualified in queries that need it
 
 OUT_DIR = Path("data/processed/powerbi_export")
 
 
 def get_engine():
-    url = f"mysql+pymysql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{FACT_DB}?charset=utf8mb4"
+    url = f"mysql+pymysql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{GOLD_DB}?charset=utf8mb4"
     return create_engine(url, echo=False)
 
 
@@ -63,13 +65,13 @@ def export_dimensions(engine) -> None:
     export_query(engine, """
         SELECT org_code, organisation_name, trust_type, sector, region,
                is_foundation, first_year_seen, last_year_seen
-        FROM dim_trust
+        FROM nhs_silver.dim_trust
         ORDER BY organisation_name
     """, "dim_trust.csv")
 
     export_query(engine, """
         SELECT financial_year, start_date, end_date, year_label_short, is_complete
-        FROM dim_financial_year
+        FROM nhs_silver.dim_financial_year
         ORDER BY financial_year
     """, "dim_financial_year.csv")
 
@@ -183,9 +185,9 @@ def export_income_detail(engine) -> None:
             sc.description         AS line_item,
             sc.analytics_category,
             CAST(f.total_000s AS SIGNED) AS amount_000s
-        FROM fct_tac f
-        JOIN dim_trust   t  ON f.org_code = t.org_code
-        JOIN dim_subcode sc ON f.sub_code = sc.sub_code
+        FROM nhs_silver.fct_tac f
+        JOIN nhs_silver.dim_trust   t  ON f.org_code = t.org_code
+        JOIN nhs_silver.dim_subcode sc ON f.sub_code = sc.sub_code
         WHERE f.worksheet_name IN ('TAC06 Op Inc 1', 'TAC07 Op Inc 2')
           AND f.main_code NOT LIKE '%PY%'
           AND sc.is_subtotal = 0
@@ -206,14 +208,111 @@ def export_expenditure_detail(engine) -> None:
             sc.description         AS line_item,
             sc.analytics_category,
             CAST(f.total_000s AS SIGNED) AS amount_000s
-        FROM fct_tac f
-        JOIN dim_trust   t  ON f.org_code = t.org_code
-        JOIN dim_subcode sc ON f.sub_code = sc.sub_code
+        FROM nhs_silver.fct_tac f
+        JOIN nhs_silver.dim_trust   t  ON f.org_code = t.org_code
+        JOIN nhs_silver.dim_subcode sc ON f.sub_code = sc.sub_code
         WHERE f.worksheet_name = 'TAC08 Op Exp'
           AND f.main_code NOT LIKE '%PY%'
           AND sc.is_subtotal = 0
         ORDER BY f.financial_year, t.org_code, f.sub_code
     """, "expenditure_detail.csv")
+
+
+def export_profit_and_loss(engine) -> None:
+    log.info("Exporting full statutory profit & loss...")
+    export_query(engine, """
+        SELECT
+            org_code,
+            organisation_name,
+            sector,
+            region,
+            trust_type,
+            financial_year,
+            CAST(patient_care_income_000s AS SIGNED)              AS patient_care_income_000s,
+            CAST(other_operating_income_000s AS SIGNED)           AS other_operating_income_000s,
+            CAST(operating_expenses_000s AS SIGNED)                AS operating_expenses_000s,
+            CAST(operating_surplus_000s AS SIGNED)                 AS operating_surplus_000s,
+            CAST(finance_income_000s AS SIGNED)                    AS finance_income_000s,
+            CAST(finance_expense_000s AS SIGNED)                   AS finance_expense_000s,
+            CAST(pdc_dividend_expense_000s AS SIGNED)              AS pdc_dividend_expense_000s,
+            CAST(net_finance_costs_000s AS SIGNED)                 AS net_finance_costs_000s,
+            CAST(other_gains_losses_000s AS SIGNED)                AS other_gains_losses_000s,
+            CAST(share_of_associates_jv_000s AS SIGNED)            AS share_of_associates_jv_000s,
+            CAST(gains_losses_transfers_absorption_000s AS SIGNED) AS gains_losses_transfers_absorption_000s,
+            CAST(corporation_tax_expense_000s AS SIGNED)           AS corporation_tax_expense_000s,
+            CAST(surplus_continuing_operations_000s AS SIGNED)     AS surplus_continuing_operations_000s,
+            CAST(surplus_discontinued_operations_000s AS SIGNED)   AS surplus_discontinued_operations_000s,
+            CAST(surplus_for_year_000s AS SIGNED)                  AS surplus_for_year_000s,
+            CAST(oci_impairments_000s AS SIGNED)                   AS oci_impairments_000s,
+            CAST(oci_revaluations_000s AS SIGNED)                  AS oci_revaluations_000s,
+            CAST(oci_share_ci_associates_jv_000s AS SIGNED)        AS oci_share_ci_associates_jv_000s,
+            CAST(oci_fv_gains_equity_instruments_000s AS SIGNED)   AS oci_fv_gains_equity_instruments_000s,
+            CAST(oci_other_gains_losses_000s AS SIGNED)            AS oci_other_gains_losses_000s,
+            CAST(oci_pension_remeasurement_000s AS SIGNED)         AS oci_pension_remeasurement_000s,
+            CAST(oci_gain_loss_transfers_absorption_000s AS SIGNED) AS oci_gain_loss_transfers_absorption_000s,
+            CAST(oci_other_reserve_movements_000s AS SIGNED)       AS oci_other_reserve_movements_000s,
+            CAST(oci_fv_gains_financial_assets_000s AS SIGNED)     AS oci_fv_gains_financial_assets_000s,
+            CAST(oci_recycling_gains_disposal_000s AS SIGNED)      AS oci_recycling_gains_disposal_000s,
+            CAST(oci_foreign_exchange_gains_000s AS SIGNED)        AS oci_foreign_exchange_gains_000s,
+            CAST(total_comprehensive_income_000s AS SIGNED)        AS total_comprehensive_income_000s
+        FROM v_profit_and_loss
+        ORDER BY financial_year, org_code
+    """, "profit_and_loss.csv")
+
+
+def export_balance_sheet(engine) -> None:
+    log.info("Exporting full statutory balance sheet...")
+    export_query(engine, """
+        SELECT
+            org_code,
+            organisation_name,
+            sector,
+            region,
+            trust_type,
+            financial_year,
+            CAST(intangible_assets_000s AS SIGNED)               AS intangible_assets_000s,
+            CAST(property_plant_equipment_000s AS SIGNED)        AS property_plant_equipment_000s,
+            CAST(right_of_use_assets_000s AS SIGNED)             AS right_of_use_assets_000s,
+            CAST(investment_property_000s AS SIGNED)             AS investment_property_000s,
+            CAST(investments_jv_associates_000s AS SIGNED)       AS investments_jv_associates_000s,
+            CAST(other_investments_nca_000s AS SIGNED)           AS other_investments_nca_000s,
+            CAST(receivables_nca_000s AS SIGNED)                 AS receivables_nca_000s,
+            CAST(other_assets_nca_000s AS SIGNED)                AS other_assets_nca_000s,
+            CAST(total_non_current_assets_000s AS SIGNED)        AS total_non_current_assets_000s,
+            CAST(inventories_000s AS SIGNED)                     AS inventories_000s,
+            CAST(receivables_ca_000s AS SIGNED)                  AS receivables_ca_000s,
+            CAST(other_investments_ca_000s AS SIGNED)            AS other_investments_ca_000s,
+            CAST(other_assets_ca_000s AS SIGNED)                 AS other_assets_ca_000s,
+            CAST(assets_held_for_sale_000s AS SIGNED)            AS assets_held_for_sale_000s,
+            CAST(cash_and_cash_equivalents_000s AS SIGNED)       AS cash_and_cash_equivalents_000s,
+            CAST(total_current_assets_000s AS SIGNED)            AS total_current_assets_000s,
+            CAST(payables_cl_000s AS SIGNED)                     AS payables_cl_000s,
+            CAST(borrowings_cl_000s AS SIGNED)                   AS borrowings_cl_000s,
+            CAST(other_financial_liabilities_cl_000s AS SIGNED)  AS other_financial_liabilities_cl_000s,
+            CAST(provisions_cl_000s AS SIGNED)                   AS provisions_cl_000s,
+            CAST(other_liabilities_cl_000s AS SIGNED)            AS other_liabilities_cl_000s,
+            CAST(liabilities_disposal_groups_000s AS SIGNED)     AS liabilities_disposal_groups_000s,
+            CAST(total_current_liabilities_000s AS SIGNED)       AS total_current_liabilities_000s,
+            CAST(total_assets_less_current_liabilities_000s AS SIGNED) AS total_assets_less_current_liabilities_000s,
+            CAST(payables_ncl_000s AS SIGNED)                    AS payables_ncl_000s,
+            CAST(borrowings_ncl_000s AS SIGNED)                  AS borrowings_ncl_000s,
+            CAST(other_financial_liabilities_ncl_000s AS SIGNED) AS other_financial_liabilities_ncl_000s,
+            CAST(provisions_ncl_000s AS SIGNED)                  AS provisions_ncl_000s,
+            CAST(other_liabilities_ncl_000s AS SIGNED)           AS other_liabilities_ncl_000s,
+            CAST(total_non_current_liabilities_000s AS SIGNED)   AS total_non_current_liabilities_000s,
+            CAST(total_assets_employed_000s AS SIGNED)           AS total_assets_employed_000s,
+            CAST(public_dividend_capital_000s AS SIGNED)         AS public_dividend_capital_000s,
+            CAST(revaluation_reserve_000s AS SIGNED)             AS revaluation_reserve_000s,
+            CAST(fv_through_oci_reserve_000s AS SIGNED)          AS fv_through_oci_reserve_000s,
+            CAST(other_reserves_000s AS SIGNED)                  AS other_reserves_000s,
+            CAST(merger_reserve_000s AS SIGNED)                  AS merger_reserve_000s,
+            CAST(income_expenditure_reserve_000s AS SIGNED)      AS income_expenditure_reserve_000s,
+            CAST(non_controlling_interest_000s AS SIGNED)        AS non_controlling_interest_000s,
+            CAST(charitable_fund_reserves_000s AS SIGNED)        AS charitable_fund_reserves_000s,
+            CAST(total_equity_000s AS SIGNED)                    AS total_equity_000s
+        FROM v_balance_sheet
+        ORDER BY financial_year, org_code
+    """, "balance_sheet.csv")
 
 
 def export_sector_benchmarks(engine) -> None:
@@ -258,6 +357,8 @@ def main():
     export_kpis(engine)
     export_income_detail(engine)
     export_expenditure_detail(engine)
+    export_profit_and_loss(engine)
+    export_balance_sheet(engine)
     export_sector_benchmarks(engine)
 
     log.info("=" * 60)

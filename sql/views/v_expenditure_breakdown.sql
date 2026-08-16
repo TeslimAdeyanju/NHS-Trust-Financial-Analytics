@@ -16,7 +16,7 @@
 --   EXP0290A  Clinical negligence premium (NHS Resolution)
 --   EXP0390   Total operating expenditure
 
-USE nhs_finance;
+USE nhs_gold;
 
 DROP VIEW IF EXISTS v_expenditure_breakdown;
 CREATE VIEW v_expenditure_breakdown AS
@@ -53,9 +53,9 @@ SELECT
     -- Grand total cross-check
     MAX(CASE WHEN f.sub_code = 'EXP0390'  THEN f.total_000s END) AS total_expenditure_000s
 
-FROM fct_tac f
-JOIN dim_trust t    ON f.org_code  = t.org_code
-JOIN dim_subcode sc ON f.sub_code  = sc.sub_code
+FROM nhs_silver.fct_tac f
+JOIN nhs_silver.dim_trust t    ON f.org_code  = t.org_code
+JOIN nhs_silver.dim_subcode sc ON f.sub_code  = sc.sub_code
 WHERE f.worksheet_name = 'TAC08 Op Exp'
 GROUP BY
     t.org_code,

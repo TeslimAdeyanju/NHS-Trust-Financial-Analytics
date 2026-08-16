@@ -1,14 +1,20 @@
 -- NHS Trust Financial Analytics
--- Schema: nhs_finance
+-- Schemas: nhs_bronze (raw landing) -> nhs_silver (conformed dims/fact) -> nhs_gold (analytical views)
 -- All monetary values in £000s unless stated otherwise
 -- Source: NHS England TAC (Trust Accounts Consolidation) data publications
+--
+-- This is a Postgres portability reference only -- not deployed or queried by anything in
+-- python/ or power_bi/. sql/schema/create_tables_mysql.sql is canonical: it carries the full
+-- ~1,000-row dim_subcode seed (all 28 real TAC worksheets) and the v_profit_and_loss /
+-- v_balance_sheet views, neither of which is duplicated here.
 
 -- ============================================================
 -- SCHEMAS
 -- ============================================================
 
-CREATE SCHEMA IF NOT EXISTS nhs_stg;
-CREATE SCHEMA IF NOT EXISTS nhs_finance;
+CREATE SCHEMA IF NOT EXISTS nhs_bronze;
+CREATE SCHEMA IF NOT EXISTS nhs_silver;
+CREATE SCHEMA IF NOT EXISTS nhs_gold;
 
 
 -- ============================================================
@@ -16,8 +22,8 @@ CREATE SCHEMA IF NOT EXISTS nhs_finance;
 -- ============================================================
 
 -- Raw TAC data — mirrors the "All data" sheet exactly
-DROP TABLE IF EXISTS nhs_stg.stg_tac_raw;
-CREATE TABLE nhs_stg.stg_tac_raw (
+DROP TABLE IF EXISTS nhs_bronze.stg_tac_raw;
+CREATE TABLE nhs_bronze.stg_tac_raw (
     organisation_name   VARCHAR(300)    NOT NULL,
     worksheet_name      VARCHAR(50)     NOT NULL,
     table_id            SMALLINT        NOT NULL,
@@ -34,14 +40,15 @@ CREATE TABLE nhs_stg.stg_tac_raw (
 );
 
 -- Raw provider list — mirrors the "List of Providers" sheet
-DROP TABLE IF EXISTS nhs_stg.stg_provider_list;
-CREATE TABLE nhs_stg.stg_provider_list (
+DROP TABLE IF EXISTS nhs_bronze.stg_provider_list;
+CREATE TABLE nhs_bronze.stg_provider_list (
     organisation_name   VARCHAR(300)    NOT NULL,
     org_code            CHAR(3)         NOT NULL,
     region              VARCHAR(100),
     sector              VARCHAR(50),
     comments            TEXT,
     source_file         VARCHAR(200)    NOT NULL,
+    trust_type          VARCHAR(20)     NOT NULL, -- NHS_TRUST | FOUNDATION_TRUST
     financial_year      CHAR(7)         NOT NULL,
     load_ts             TIMESTAMPTZ     DEFAULT now()
 );
@@ -52,8 +59,8 @@ CREATE TABLE nhs_stg.stg_provider_list (
 -- ============================================================
 
 -- dim_trust: one row per provider
-DROP TABLE IF EXISTS nhs_finance.dim_trust CASCADE;
-CREATE TABLE nhs_finance.dim_trust (
+DROP TABLE IF EXISTS nhs_silver.dim_trust CASCADE;
+CREATE TABLE nhs_silver.dim_trust (
     org_code            CHAR(3)         PRIMARY KEY,
     organisation_name   VARCHAR(300)    NOT NULL,
     trust_type          VARCHAR(20)     NOT NULL,    -- NHS_TRUST | FOUNDATION_TRUST
@@ -66,8 +73,8 @@ CREATE TABLE nhs_finance.dim_trust (
 );
 
 -- dim_financial_year: one row per NHS financial year
-DROP TABLE IF EXISTS nhs_finance.dim_financial_year CASCADE;
-CREATE TABLE nhs_finance.dim_financial_year (
+DROP TABLE IF EXISTS nhs_silver.dim_financial_year CASCADE;
+CREATE TABLE nhs_silver.dim_financial_year (
     financial_year      CHAR(7)         PRIMARY KEY, -- e.g. 2023/24
     start_date          DATE            NOT NULL,    -- 1 April
     end_date            DATE            NOT NULL,    -- 31 March
@@ -76,7 +83,7 @@ CREATE TABLE nhs_finance.dim_financial_year (
 );
 
 -- Seed dim_financial_year
-INSERT INTO nhs_finance.dim_financial_year VALUES
+INSERT INTO nhs_silver.dim_financial_year VALUES
     ('2019/20', '2019-04-01', '2020-03-31', '19/20', TRUE),
     ('2020/21', '2020-04-01', '2021-03-31', '20/21', TRUE),
     ('2021/22', '2021-04-01', '2022-03-31', '21/22', TRUE),
@@ -84,17 +91,17 @@ INSERT INTO nhs_finance.dim_financial_year VALUES
     ('2023/24', '2023-04-01', '2024-03-31', '23/24', TRUE);
 
 -- dim_worksheet: reference for TAC schedule names and purposes
-DROP TABLE IF EXISTS nhs_finance.dim_worksheet CASCADE;
-CREATE TABLE nhs_finance.dim_worksheet (
+DROP TABLE IF EXISTS nhs_silver.dim_worksheet CASCADE;
+CREATE TABLE nhs_silver.dim_worksheet (
     worksheet_name      VARCHAR(50)     PRIMARY KEY,
     schedule_title      VARCHAR(200)    NOT NULL,
     category            VARCHAR(50)     NOT NULL,   -- INCOME | EXPENDITURE | BALANCE_SHEET | CASH_FLOW | STAFF | OTHER
     sub_code_prefix     VARCHAR(10)
 );
 
-INSERT INTO nhs_finance.dim_worksheet VALUES
+INSERT INTO nhs_silver.dim_worksheet VALUES
     ('TAC02 SoCI',          'Statement of Comprehensive Income',            'SUMMARY',          'SCI'),
-    ('TAC03 SoFP',          'Statement of Financial Position',              'BALANCE_SHEET',    'SFP'),
+    ('TAC03 SoFP',          'Statement of Financial Position',              'BALANCE_SHEET',    'BAL'),
     ('TAC04 SOCIE',         'Statement of Changes in Equity',               'EQUITY',           'SCE'),
     ('TAC05 SoCF',          'Statement of Cash Flows',                      'CASH_FLOW',        'SCF'),
     ('TAC06 Op Inc 1',      'Operating Income from Patient Care',           'INCOME',           'INC0'),
@@ -114,10 +121,10 @@ INSERT INTO nhs_finance.dim_worksheet VALUES
     ('TAC29 Losses+SP',     'Losses and Special Payments',                  'OTHER',            'LSP');
 
 -- dim_subcode: reference for line item codes (sourced from illustrative file)
-DROP TABLE IF EXISTS nhs_finance.dim_subcode CASCADE;
-CREATE TABLE nhs_finance.dim_subcode (
+DROP TABLE IF EXISTS nhs_silver.dim_subcode CASCADE;
+CREATE TABLE nhs_silver.dim_subcode (
     sub_code            VARCHAR(20)     PRIMARY KEY,
-    worksheet_name      VARCHAR(50)     REFERENCES nhs_finance.dim_worksheet(worksheet_name),
+    worksheet_name      VARCHAR(50)     REFERENCES nhs_silver.dim_worksheet(worksheet_name),
     description         VARCHAR(300)    NOT NULL,
     expected_sign       CHAR(3),                    -- '+' | '-' | '+/-'
     unit                VARCHAR(10)     NOT NULL DEFAULT '£000',  -- '£000' | 'No.' | '%'
@@ -126,7 +133,7 @@ CREATE TABLE nhs_finance.dim_subcode (
 );
 
 -- Key subcodes for analytics (extend as needed)
-INSERT INTO nhs_finance.dim_subcode VALUES
+INSERT INTO nhs_silver.dim_subcode VALUES
     -- SoCI summary
     ('SCI0100A', 'TAC02 SoCI', 'Operating income from patient care activities',       '+',   '£000', TRUE,  'PATIENT_INCOME'),
     ('SCI0110A', 'TAC02 SoCI', 'Other operating income',                              '+',   '£000', TRUE,  'OTHER_INCOME'),
@@ -203,12 +210,12 @@ INSERT INTO nhs_finance.dim_subcode VALUES
 -- ============================================================
 
 -- fct_tac: normalised fact table — one row per provider x year x subcode
-DROP TABLE IF EXISTS nhs_finance.fct_tac CASCADE;
-CREATE TABLE nhs_finance.fct_tac (
+DROP TABLE IF EXISTS nhs_silver.fct_tac CASCADE;
+CREATE TABLE nhs_silver.fct_tac (
     tac_id              BIGSERIAL       PRIMARY KEY,
-    org_code            CHAR(3)         NOT NULL REFERENCES nhs_finance.dim_trust(org_code),
-    financial_year      CHAR(7)         NOT NULL REFERENCES nhs_finance.dim_financial_year(financial_year),
-    worksheet_name      VARCHAR(50)     NOT NULL REFERENCES nhs_finance.dim_worksheet(worksheet_name),
+    org_code            CHAR(3)         NOT NULL REFERENCES nhs_silver.dim_trust(org_code),
+    financial_year      CHAR(7)         NOT NULL REFERENCES nhs_silver.dim_financial_year(financial_year),
+    worksheet_name      VARCHAR(50)     NOT NULL REFERENCES nhs_silver.dim_worksheet(worksheet_name),
     table_id            SMALLINT        NOT NULL,
     main_code           VARCHAR(20)     NOT NULL,
     sub_code            VARCHAR(20)     NOT NULL,
@@ -219,10 +226,10 @@ CREATE TABLE nhs_finance.fct_tac (
     UNIQUE (org_code, financial_year, main_code, sub_code)
 );
 
-CREATE INDEX idx_fct_tac_org_year    ON nhs_finance.fct_tac (org_code, financial_year);
-CREATE INDEX idx_fct_tac_sub_code    ON nhs_finance.fct_tac (sub_code);
-CREATE INDEX idx_fct_tac_worksheet   ON nhs_finance.fct_tac (worksheet_name);
-CREATE INDEX idx_fct_tac_year        ON nhs_finance.fct_tac (financial_year);
+CREATE INDEX idx_fct_tac_org_year    ON nhs_silver.fct_tac (org_code, financial_year);
+CREATE INDEX idx_fct_tac_sub_code    ON nhs_silver.fct_tac (sub_code);
+CREATE INDEX idx_fct_tac_worksheet   ON nhs_silver.fct_tac (worksheet_name);
+CREATE INDEX idx_fct_tac_year        ON nhs_silver.fct_tac (financial_year);
 
 
 -- ============================================================
@@ -230,7 +237,7 @@ CREATE INDEX idx_fct_tac_year        ON nhs_finance.fct_tac (financial_year);
 -- ============================================================
 
 -- v_income_expenditure: top-level I&E summary from TAC02 SoCI (CY rows only)
-CREATE OR REPLACE VIEW nhs_finance.v_income_expenditure AS
+CREATE OR REPLACE VIEW nhs_gold.v_income_expenditure AS
 SELECT
     t.org_code,
     t.organisation_name,
@@ -246,14 +253,14 @@ SELECT
     ABS(MAX(CASE WHEN f.sub_code = 'SCI0125A' THEN f.total_000s END)) AS total_expenditure_000s,
     MAX(CASE WHEN f.sub_code = 'SCI0140A' THEN f.total_000s END) AS operating_surplus_000s,
     MAX(CASE WHEN f.sub_code = 'SCI0240'  THEN f.total_000s END) AS net_surplus_000s
-FROM nhs_finance.fct_tac f
-JOIN nhs_finance.dim_trust t ON f.org_code = t.org_code
+FROM nhs_silver.fct_tac f
+JOIN nhs_silver.dim_trust t ON f.org_code = t.org_code
 WHERE f.worksheet_name = 'TAC02 SoCI'
 GROUP BY t.org_code, t.organisation_name, t.sector, t.region, t.trust_type, f.financial_year;
 
 
 -- v_expenditure_breakdown: operating expenditure by category
-CREATE OR REPLACE VIEW nhs_finance.v_expenditure_breakdown AS
+CREATE OR REPLACE VIEW nhs_gold.v_expenditure_breakdown AS
 SELECT
     t.org_code,
     t.organisation_name,
@@ -267,15 +274,15 @@ SELECT
     MAX(CASE WHEN f.sub_code = 'EXP0170' THEN f.total_000s END) AS drugs_cost_000s,
     MAX(CASE WHEN f.sub_code = 'EXP0130' THEN f.total_000s END) AS staff_cost_000s,
     MAX(CASE WHEN f.sub_code = 'EXP0390' THEN f.total_000s END) AS total_expenditure_000s
-FROM nhs_finance.fct_tac f
-JOIN nhs_finance.dim_trust t  ON f.org_code = t.org_code
-JOIN nhs_finance.dim_subcode sc ON f.sub_code = sc.sub_code
+FROM nhs_silver.fct_tac f
+JOIN nhs_silver.dim_trust t  ON f.org_code = t.org_code
+JOIN nhs_silver.dim_subcode sc ON f.sub_code = sc.sub_code
 WHERE f.worksheet_name = 'TAC08 Op Exp'
 GROUP BY t.org_code, t.organisation_name, t.sector, t.region, t.trust_type, f.financial_year;
 
 
 -- v_workforce: staff costs and WTE from TAC09
-CREATE OR REPLACE VIEW nhs_finance.v_workforce AS
+CREATE OR REPLACE VIEW nhs_gold.v_workforce AS
 SELECT
     t.org_code,
     t.organisation_name,
@@ -291,17 +298,17 @@ SELECT
     MAX(CASE WHEN f.sub_code = 'STA0330'  THEN f.total_000s END) AS admin_estates_wte,
     MAX(CASE WHEN f.sub_code = 'STA0370'  THEN f.total_000s END) AS scientific_tech_wte,
     MAX(CASE WHEN f.sub_code = 'STA0550'  THEN f.total_000s END) AS avg_days_lost_per_wte
-FROM nhs_finance.fct_tac f
-JOIN nhs_finance.dim_trust t ON f.org_code = t.org_code
+FROM nhs_silver.fct_tac f
+JOIN nhs_silver.dim_trust t ON f.org_code = t.org_code
 WHERE f.worksheet_name = 'TAC09 Staff'
 GROUP BY t.org_code, t.organisation_name, t.sector, t.region, t.trust_type, f.financial_year;
 
 
 -- v_kpis: computed KPIs joining income, expenditure and workforce
-CREATE OR REPLACE VIEW nhs_finance.v_kpis AS
-WITH ie AS (SELECT * FROM nhs_finance.v_income_expenditure),
-     exp AS (SELECT * FROM nhs_finance.v_expenditure_breakdown),
-     wf  AS (SELECT * FROM nhs_finance.v_workforce)
+CREATE OR REPLACE VIEW nhs_gold.v_kpis AS
+WITH ie AS (SELECT * FROM nhs_gold.v_income_expenditure),
+     exp AS (SELECT * FROM nhs_gold.v_expenditure_breakdown),
+     wf  AS (SELECT * FROM nhs_gold.v_workforce)
 SELECT
     ie.org_code,
     ie.organisation_name,

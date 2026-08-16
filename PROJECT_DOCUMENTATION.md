@@ -215,7 +215,7 @@ I designed the system as a **six-stage pipeline**, moving in one direction only 
 where each stage is owned by a different technology and has exactly one job:
 
 <p align="center">
-<img src="docs/images/pipeline_architecture.png" width="480" alt="Six-stage pipeline architecture: NHS England source files are manually downloaded into data/raw/, ingested by load_tac_data.py into MySQL staging (nhs_stg), joined and upserted into MySQL analytics (nhs_finance) as a star schema with SQL views, exported by export_for_powerbi.py to CSV, and imported into the Power BI dashboard." />
+<img src="docs/images/pipeline_architecture.png" width="480" alt="Six-stage pipeline architecture: NHS England source files are manually downloaded into data/raw/, ingested by load_tac_data.py into MySQL staging (nhs_bronze), joined and upserted into MySQL analytics (nhs_silver) as a star schema, pivoted by SQL views into nhs_gold, exported by export_for_powerbi.py to CSV, and imported into the Power BI dashboard." />
 </p>
 
 Each stage below is documented in the order data actually flows through it: what the stage is, why it
@@ -391,7 +391,7 @@ side by side for comparison. To avoid double-counting when combining 3 years of 
 
 ## ③ MYSQL STAGING
 
-`nhs_stg` — populated by `python/ingestion/load_tac_data.py`. This stage's only job is to get the Excel
+`nhs_bronze` — populated by `python/ingestion/load_tac_data.py`. This stage's only job is to get the Excel
 data into a queryable form with the *minimum* transformation applied — one row per
 (organisation, worksheet, SubCode), essentially as read off the sheet, plus a name-to-ODS-code lookup
 table. I deliberately kept this stage "dumb": no joins, no pivoting, no business logic — just a faithful,
@@ -414,23 +414,32 @@ None of `stg_tac_raw`, `dim_trust`, `fct_tac`, or any `v_*` view exists as a fil
 this repo — they exist only inside the running MySQL instance. The only way to inspect them is to connect
 a client and query the server directly (`SHOW DATABASES;`, `SHOW TABLES;`, and so on).
 
-I split the MySQL layer into two databases — this raw staging database (`nhs_stg`) and a clean analytics
-database (`nhs_finance`, [stage ④](#④-mysql-analytics)) — rather than loading straight into the star schema,
-both created up front by the same script:
+I split the MySQL layer into three databases, medallion-style — this raw staging database (`nhs_bronze`),
+a conformed dims/fact database (`nhs_silver`), and a curated analytical-views database (`nhs_gold`,
+[stage ④](#④-mysql-analytics)) — rather than loading straight into the star schema and mixing tables and
+views in one place, all created up front by the same script:
 
 ```sql
-CREATE DATABASE IF NOT EXISTS nhs_stg
+CREATE DATABASE IF NOT EXISTS nhs_bronze
     CHARACTER SET utf8mb4
     COLLATE utf8mb4_unicode_ci;
 
-CREATE DATABASE IF NOT EXISTS nhs_finance
+CREATE DATABASE IF NOT EXISTS nhs_silver
+    CHARACTER SET utf8mb4
+    COLLATE utf8mb4_unicode_ci;
+
+CREATE DATABASE IF NOT EXISTS nhs_gold
     CHARACTER SET utf8mb4
     COLLATE utf8mb4_unicode_ci;
 ```
 
+`nhs_gold`'s views reference `nhs_silver`'s tables via fully-qualified cross-database names
+(`FROM nhs_silver.fct_tac`) — MySQL views can query another database on the same server without any
+linked-server setup, so the three-way split costs nothing at query time.
+
 ### How Python connects to the database
 
-The pipeline is just another client of the MySQL server — it doesn't touch `nhs_stg` as files, it opens a
+The pipeline is just another client of the MySQL server — it doesn't touch `nhs_bronze` as files, it opens a
 network connection to the same `127.0.0.1:3306` endpoint any other client would use:
 
 ```python
@@ -446,7 +455,7 @@ known shortcut if asked about production-readiness (see `CLAUDE.md`).
 
 ### Getting data from the workbook into staging
 
-For each of the six source files, the pipeline performs four operations to get it into `nhs_stg`:
+For each of the six source files, the pipeline performs four operations to get it into `nhs_bronze`:
 
 **1. Reads the provider list.** Each workbook has a "List of Providers" sheet, which is the only place the
 Trust's 3-character ODS code appears — the main data sheet only has the Trust's full name.
@@ -540,11 +549,11 @@ Power BI is reading from.
 
 ## ④ MYSQL ANALYTICS
 
-`nhs_finance` — populated by the same script's `promote_to_fact()` step, which joins staging data against
+`nhs_silver` — populated by the same script's `promote_to_fact()` step, which joins staging data against
 the provider list to resolve each organisation name to its 3-character ODS code, then UPSERTs the result
 into the star schema below, and refreshes `dim_trust`. This is where the raw, EAV-shaped staging data
-becomes a conformed, indexed fact table with proper keys — and where the SQL views do their pivoting to
-produce KPI-ready output.
+becomes a conformed, indexed fact table with proper keys. `nhs_gold` sits on top of it, holding only the
+SQL views that pivot `nhs_silver.fct_tac` into KPI-ready and statement-shaped output.
 
 ### Why the fact table is kept in long/narrow format
 
@@ -797,11 +806,14 @@ analytics layer that Power BI is reading from.
 ### Analytics layer (SQL views)
 
 `fct_tac` is correct once loaded, but it's still shaped as 2.18 million individual SubCode rows — not
-something a dashboard can chart directly. I built five SQL views on top of it that pivot SubCodes into
-columns, turning the long/narrow fact data into trust-level, year-level analytical tables.
+something a dashboard can chart directly. I built seven SQL views on top of it that pivot SubCodes into
+columns, turning the long/narrow fact data into trust-level, year-level analytical tables. `fct_tac` itself
+already carries all 28 real TAC worksheets (`promote_to_fact()` has no worksheet filter), so a new view
+only ever needs a new `MAX(CASE WHEN sub_code = ...)` pivot, not a change to ingestion.
 
-**v_income_expenditure** — pivots TAC02 SoCI (Statement of Comprehensive Income) SubCodes into an I&E
-summary row per Trust per year.
+**v_income_expenditure** — pivots the 5 core TAC02 SoCI (Statement of Comprehensive Income) SubCodes into
+an I&E summary row per Trust per year. Kept deliberately summary-only, since `v_kpis` and
+`v_trust_annual_scorecard` depend on its shape.
 
 ```sql
 MAX(CASE WHEN sub_code = 'SCI0100A' THEN total_000s END)  AS patient_care_income_000s
@@ -811,6 +823,9 @@ MAX(CASE WHEN sub_code = 'SCI0240'  THEN total_000s END)  AS net_surplus_000s
 ```
 
 Output: 624 rows (208 average trusts × 3 years).
+
+**v_profit_and_loss** — the full-detail counterpart: every real TAC02 SoCI/SOC line (~27 columns) down to
+`total_comprehensive_income_000s`, for a proper statutory P&L rather than a KPI summary.
 
 **v_expenditure_breakdown** — pivots TAC08 Operating Expenditure SubCodes, using
 `dim_subcode.analytics_category` to group lines into Pay, Non-Pay, and Depreciation/Amortisation buckets.
@@ -822,7 +837,14 @@ SUM(CASE WHEN sc.analytics_category = 'NON_PAY' THEN total_000s END) AS non_pay_
 
 **v_workforce** — pivots TAC09 Staff SubCodes into staff cost and WTE columns per Trust per year.
 
-**v_kpis** — joins the three views above and computes the derived KPIs defined in full below.
+**v_balance_sheet** — the Statement of Financial Position counterpart to `v_profit_and_loss`: all 40 real
+TAC03 SoFP `BAL*` lines (non-current/current assets and liabilities down to total equity). Until this view
+existed, TAC03 SoFP rows sat in `fct_tac` unused — the raw data always had them, nothing pivoted them.
+Unlike SoCI/EXP, this schedule stores correctly signed values already (liabilities negative), so the pivot
+needs no sign-flipping.
+
+**v_kpis** — joins `v_income_expenditure`, `v_expenditure_breakdown`, and `v_workforce`, and computes the
+derived KPIs defined in full below.
 
 ```sql
 -- EBITDA = Operating surplus + depreciation/amortisation
@@ -970,7 +992,7 @@ national pay bill in each year, with NHS England funding only approximately 60�
 ## ⑤ CSV EXPORTS
 
 `data/processed/powerbi_export/` — populated by `python/reporting/export_for_powerbi.py`, which queries
-the views and tables in [stage ④](#④-mysql-analytics) and writes nine CSV files in roughly 30 seconds.
+the views and tables in [stage ④](#④-mysql-analytics) and writes eleven CSV files in roughly 30 seconds.
 Portability is this stage's job: it turns a live database dependency into a set of flat files that Power
 BI (or any other tool, or a reviewer with no MySQL access) can consume without a database connection at
 all. Power BI can alternatively connect directly to MySQL in DirectQuery mode — the views were designed to
@@ -988,7 +1010,7 @@ rather than left as MySQL's native `DECIMAL(14,0)`. Pandas reads unwrapped `DECI
 `Decimal` objects, which write to CSV with inconsistent formatting; casting to a signed integer in SQL
 guarantees plain, Power-BI-friendly numbers in the output file.
 
-### All nine files, and what's in each one
+### All eleven files, and what's in each one
 
 | File | Role | Source | Grain | Columns | Rows |
 |------|------|--------|-------|---------|------|
@@ -1000,9 +1022,11 @@ guarantees plain, Power-BI-friendly numbers in the output file.
 | `kpis.csv` | KPI scorecard | `v_kpis` | One row per trust per year | 19 | 624 |
 | `income_detail.csv` | Income drilldown | `fct_tac` + `dim_subcode`, filtered | One row per trust per year per income SubCode | 9 | 9,144 |
 | `expenditure_detail.csv` | Expenditure drilldown | `fct_tac` + `dim_subcode`, filtered | One row per trust per year per expenditure SubCode | 9 | 11,856 |
+| `profit_and_loss.csv` | Full statutory P&L | `v_profit_and_loss` | One row per trust per year | ~27 | ~624 |
+| `balance_sheet.csv` | Full statutory Balance Sheet | `v_balance_sheet` | One row per trust per year | 40 | ~624 |
 | `sector_benchmarks.csv` | Sector benchmarking (aggregated) | `v_kpis`, aggregated | One row per financial year per sector per trust type | 12 | 30 |
 
-`dim_trust.csv` is the join key every other file relies on — all eight remaining files carry `org_code`
+`dim_trust.csv` is the join key every other file relies on — all ten remaining files carry `org_code`
 and join back to it. `income_detail.csv` and `expenditure_detail.csv` are the only two not built from a
 pre-aggregated view: both query `fct_tac` directly, joined to `dim_trust` and `dim_subcode`, filtered to
 Current Year rows and non-subtotal SubCodes — one row per line item rather than one row per trust.
@@ -1010,13 +1034,18 @@ Current Year rows and non-subtotal SubCodes — one row per line item rather tha
 totals are computed in £millions, since sector-level sums in £000s run to eight figures and stop being
 readable on a benchmarking chart.
 
-### The star schema once these nine files reach Power BI
+### The star schema once these eleven files reach Power BI
 
 Each CSV lands in Power BI as its own table (`fact_ie_summary`, `fact_kpis`, `fact_workforce`,
-`fact_income_detail`, `fact_expenditure_detail`, `fact_expenditure_breakdown`, `fact_sector_benchmarks`,
-plus `dim_trust` and `dim_financial_year`), and Power Query's own model view redraws the same star shape
-described in [stage ④](#④-mysql-analytics) — seven fact tables radiating out from the two shared
-dimensions, joined on `org_code` and `financial_year`:
+`fact_income_detail`, `fact_expenditure_detail`, `fact_expenditure_breakdown`, `fact_profit_and_loss`,
+`fact_balance_sheet`, `fact_sector_benchmarks`, plus `dim_trust` and `dim_financial_year`), and Power
+Query's own model view redraws the same star shape described in [stage ④](#④-mysql-analytics) — every
+fact table radiating out from the two shared dimensions, joined on `org_code` and `financial_year`, the
+same pattern documented in `power_bi/setup_guide.md`.
+
+The screenshot below predates `fact_profit_and_loss`/`fact_balance_sheet` (added later, following the
+identical relationship pattern already shown here) and shows the seven fact tables that existed when it
+was taken:
 
 <p align="center">
 <img src="docs/images/powerbi_model.png" alt="Power BI model view: dim_trust and dim_financial_year sit at the centre, with one-to-many relationships fanning out to seven imported fact tables — fact_ie_summary, fact_kpis, fact_workforce, fact_income_detail, fact_expenditure_detail, fact_expenditure_breakdown, and fact_sector_benchmarks — each joined on org_code and/or financial_year. A separate _Measures table holds the DAX measures, unconnected to any relationship." />
@@ -1142,7 +1171,8 @@ portfolio-01-nhs-trust-financial-analytics/
 ├── python/
 │   ├── CLAUDE.md                      ← Python layer coding standards
 │   ├── ingestion/
-│   │   └── load_tac_data.py           ← Main ingestion script — stages ③④
+│   │   ├── load_tac_data.py           ← Main ingestion script — stages ③④
+│   │   └── build_subcode_reference.py ← One-off dim_subcode label generator (not in the daily pipeline)
 │   ├── transformation/                ← Enrichment and validation — stage ④
 │   │   ├── transform_tac_data.py
 │   │   └── validate_tac_data.py
@@ -1156,8 +1186,10 @@ portfolio-01-nhs-trust-financial-analytics/
 │   │   └── create_tables.sql          ← PostgreSQL equivalent (reference)
 │   ├── views/                         ← Standalone, canonical version of each v_* view — stage ④
 │   │   ├── v_income_expenditure.sql
+│   │   ├── v_profit_and_loss.sql      ← Full statutory P&L (all real TAC02 SoCI/SOC lines)
 │   │   ├── v_expenditure_breakdown.sql
 │   │   ├── v_workforce.sql
+│   │   ├── v_balance_sheet.sql        ← Full statutory Balance Sheet (all 40 TAC03 SoFP BAL* lines)
 │   │   ├── v_kpis.sql
 │   │   ├── v_trust_annual_scorecard.sql
 │   │   └── v_validation_checks.sql    ← 10 data quality checks with expected values
@@ -1207,15 +1239,15 @@ pip install pandas sqlalchemy pymysql openpyxl
 
 1. Download the six TAC Excel files from NHS England's TAC publications page and save them to `data/raw/`
    using the exact filenames listed in [stage ②](#②-raw-excel-files).
-2. Build the schema: `mysql -u root -p < sql/schema/create_tables_mysql.sql` — creates both databases, all
-   tables, seed reference data, and the four core views. Expected: 2 databases, 7 tables, 5 views, 84 seed
-   rows.
+2. Build the schema: `mysql -u root -p < sql/schema/create_tables_mysql.sql` — creates all three databases,
+   all tables, seed reference data, and the seven core views. Expected: 3 databases, 7 tables, 7 views,
+   ~1,033 seed rows (5 financial years, 28 worksheets, ~1,000 SubCode labels).
 3. Run the ingestion pipeline: `python python/ingestion/load_tac_data.py` (~10–15 minutes for all 6
    files).
 4. Validate the load: run `sql/views/v_validation_checks.sql`, or
    `python python/transformation/validate_tac_data.py`.
 5. Export for Power BI: `python python/reporting/export_for_powerbi.py` (~30 seconds).
-6. Open Power BI Desktop, import the nine CSVs from `data/processed/powerbi_export/`, and follow
+6. Open Power BI Desktop, import the eleven CSVs from `data/processed/powerbi_export/`, and follow
    `power_bi/setup_guide.md` to build the relationships, measures, and report pages.
 
 `data/raw/` and `data/processed/` are both git-ignored — neither is present in a fresh clone of the

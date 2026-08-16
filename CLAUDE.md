@@ -12,27 +12,37 @@ findings and [PROJECT_DOCUMENTATION.md](PROJECT_DOCUMENTATION.md) for the full d
 
 ## Architecture (read this before touching the pipeline)
 
-**Two-database MySQL pattern**, built by `sql/schema/create_tables_mysql.sql`:
+**Three-database MySQL medallion pattern**, built by `sql/schema/create_tables_mysql.sql`:
 
-- `nhs_stg` — staging: `stg_tac_raw` (raw rows from the "All data" sheet), `stg_provider_list` (trust
-  name → ODS code lookup from the "List of Providers" sheet). Reloaded per file with DELETE+INSERT, so
-  reruns are idempotent.
-- `nhs_finance` — analytics: dims `dim_trust`, `dim_financial_year`, `dim_worksheet`, `dim_subcode`; one
-  fact table `fct_tac`; five `v_*` analytical views.
+- `nhs_bronze` — raw landing: `stg_tac_raw` (raw rows from the "All data" sheet), `stg_provider_list`
+  (trust name → ODS code lookup from the "List of Providers" sheet). Reloaded per file with
+  DELETE+INSERT, so reruns are idempotent.
+- `nhs_silver` — conformed: dims `dim_trust`, `dim_financial_year`, `dim_worksheet`, `dim_subcode`; one
+  fact table `fct_tac`.
+- `nhs_gold` — curated: seven `v_*` analytical views (see below), each referencing `nhs_silver.*` tables
+  via fully-qualified cross-database names (MySQL views can query another database on the same server
+  without qualification tricks — `FROM nhs_silver.fct_tac`, etc.).
+
+This is a real three-database split, not just a naming convention: `nhs_bronze`/`nhs_silver` hold tables,
+`nhs_gold` holds only views, and every Python script now points its engine at whichever layer it primarily
+reads and fully-qualifies the other layer's tables/views in its SQL (e.g. `export_for_powerbi.py` connects
+to `nhs_gold` but writes `FROM nhs_silver.dim_trust` for the two dimension exports).
 
 **The fact table is long/narrow (EAV-style), not wide.** `fct_tac` has one row per
 `(org_code, financial_year, main_code, sub_code)` — e.g. one row for "patient care income", another for
 "total pay costs", etc. — because that's the shape NHS England publishes TAC data in. There is no
 pre-pivoted income-statement table. Getting a trust's income/expenditure requires pivoting on `sub_code`
-(e.g. `SCI0100A` = patient care income, `SCI0140A` = operating surplus, `EXP0130` = staff costs) — this is
-exactly what the SQL views do. See `agent_docs/data_dictionary.md` for the SubCode reference and
-`PROJECT_DOCUMENTATION.md`, stage ④, for the full star-schema diagram.
+(e.g. `SCI0100A` = patient care income, `SCI0140A` = operating surplus, `EXP0130` = staff costs, `BAL1500`
+= total equity) — this is exactly what the SQL views do. `promote_to_fact()` in `load_tac_data.py` loads
+**every** worksheet indiscriminately (no worksheet filter), so all 28 real TAC schedules — not just the
+handful with a dedicated view — already flow into `fct_tac`. See `agent_docs/data_dictionary.md` for the
+SubCode reference and `PROJECT_DOCUMENTATION.md`, stage ④, for the full star-schema diagram.
 
 **Pipeline flow** (each stage reads what the last stage wrote — run them in order):
 
 ```
-data/raw/*.xlsx  →  python/ingestion/load_tac_data.py       →  nhs_stg.* , nhs_finance.dim_trust / fct_tac
-                 →  sql/views/*.sql (or create_tables_mysql.sql)  →  nhs_finance.v_*
+data/raw/*.xlsx  →  python/ingestion/load_tac_data.py       →  nhs_bronze.* , nhs_silver.dim_trust / fct_tac
+                 →  sql/views/*.sql (or create_tables_mysql.sql)  →  nhs_gold.v_*
                  →  python/transformation/transform_tac_data.py   →  data/processed/*.csv (enrichment/benchmarks)
                  →  python/transformation/validate_tac_data.py    →  data/processed/validation_report.csv
                  →  python/reporting/export_for_powerbi.py        →  data/processed/powerbi_export/*.csv
@@ -42,28 +52,40 @@ Each Excel file drives one `financial_year` × `trust_type` (`NHS_TRUST` or `FOU
 annual file contains both Current Year (CY) and Prior Year (PY) rows for comparison — the ingestion layer
 keeps **CY only** (`main_code` filtered on `year_type`) to avoid double-counting across years.
 
-**View layer** (`nhs_finance.v_*`, defined in both `sql/schema/create_tables_mysql.sql` and standalone
-under `sql/views/` — the standalone files are the fuller/canonical versions, check both if a view looks
-out of date):
+**View layer** (`nhs_gold.v_*`, defined in both `sql/schema/create_tables_mysql.sql` and standalone under
+`sql/views/` — the standalone files are the fuller/canonical versions, check both if a view looks out of
+date):
 
-- `v_income_expenditure` — pivots TAC02 SoCI SubCodes into I&E per trust/year
+- `v_income_expenditure` — pivots the 5 core TAC02 SoCI SubCodes into I&E summary per trust/year; feeds
+  `v_kpis`/`v_trust_annual_scorecard` — kept summary-only so those dependents don't change shape
+- `v_profit_and_loss` — full statutory Profit & Loss: all ~27 real TAC02 SoCI/SOC lines (operating result,
+  finance costs, other comprehensive income), down to `total_comprehensive_income_000s`
 - `v_expenditure_breakdown` — pivots TAC08 into pay/non-pay/depreciation/drugs/clinical-negligence
 - `v_workforce` — pivots TAC09 into staff costs and WTE
-- `v_kpis` — joins the three views above and computes EBITDA margin, pay % of income, cost per WTE, net
-  surplus margin, plus RAG flags
-- `v_trust_annual_scorecard` — wide view combining everything, built for DirectQuery and ad-hoc SQL; used by
-  `transform_tac_data.py`, `validate_tac_data.py`, and `sql/analysis/*.sql`. **Not** what
-  `export_for_powerbi.py` queries — the CSV export reads the four views above separately instead
+- `v_balance_sheet` — full statutory Balance Sheet: all 40 real TAC03 SoFP `BAL*` lines, non-current/
+  current assets and liabilities down to `total_equity_000s`. Unlike SoCI/EXP, this schedule already
+  stores correctly signed values in the raw data (liabilities negative) — no sign-flipping in the pivot
+- `v_kpis` — joins income/expenditure/workforce views and computes EBITDA margin, pay % of income, cost
+  per WTE, net surplus margin, plus RAG flags
+- `v_trust_annual_scorecard` — wide view combining everything, built for DirectQuery and ad-hoc SQL; used
+  by `transform_tac_data.py`, `validate_tac_data.py`, and `sql/analysis/*.sql`. **Not** what
+  `export_for_powerbi.py` queries for its core exports — the CSV export reads the individual views
+  (including `v_profit_and_loss`/`v_balance_sheet`) separately instead
 
-### agent_docs/ and subdirectory CLAUDE.md files describe a broader, partly-aspirational model — don't take them at face value
+**SubCode labels**: `dim_subcode` carries ~1,000 rows covering every SubCode in all 28 real TAC worksheets
+(not just the ones with a dedicated view) — generated from NHS England's illustrative TAC workbook by
+`python/ingestion/build_subcode_reference.py`. Re-run that script if NHS England revises the illustrative
+file in a future year; it writes to `data/processed/` for review before hand-merging into the schema.
 
-`agent_docs/kpi_definitions.md` and the per-folder `python/CLAUDE.md` / `sql/CLAUDE.md` /
-`power_bi/CLAUDE.md` files were written against a more general finance-analytics schema (PostgreSQL,
-monthly `period_key`/`period_label` M01–M12, a `fct_income_expenditure` fact table with
-`account_type`/`data_type`/`budget_000s` vs `actual_000s`, a `fct_workforce` fact with staff groups and
-contract types, `icb_code` on `dim_trust`) — **none of that is what's implemented**. The actual pipeline
-is MySQL, annual-only (no period/month grain — TAC is an annual return), actuals-only (no budget/forecast
-data exists), and uses the EAV `fct_tac` design above. Concretely:
+### Two of the agent_docs/ files describe a stale, aspirational model — the subfolder CLAUDE.md files do not
+
+`agent_docs/kpi_definitions.md` and `agent_docs/report_calendar.md` were written against a more general
+finance-analytics schema (PostgreSQL, monthly `period_key`/`period_label` M01–M12, a
+`fct_income_expenditure` fact table with `account_type`/`data_type`/`budget_000s` vs `actual_000s`, a
+`fct_workforce` fact with staff groups and contract types, `icb_code` on `dim_trust`, a CIP tracker,
+scripts like `load_workforce.py`/`load_eric.py`) — **none of that is what's implemented**. The actual
+pipeline is MySQL, annual-only (no period/month grain — TAC is an annual return), actuals-only (no
+budget/forecast data exists), and uses the EAV `fct_tac` design above. Concretely:
 
 - `dim_trust.trust_type` is `NHS_TRUST` | `FOUNDATION_TRUST` — not the `ACUTE`/`MENTAL_HEALTH`/etc. values
   the trust *sector* takes. Sector (`Acute`, `Mental Health`, `Community`, `Ambulance`, `Specialist`)
@@ -75,13 +97,17 @@ data exists), and uses the EAV `fct_tac` design above. Concretely:
   explicitly out of scope — `sql/views/v_kpis.sql`'s header comment says why (they need data sources —
   CIP tracker, in-year budget returns, ERIC estates — that aren't part of this project).
 
-Trust the code (`sql/schema/`, `sql/views/`, `python/`) over `agent_docs/` or the subfolder CLAUDE.md
-files when they disagree.
+`agent_docs/data_dictionary.md` does not have this problem — its source-file/SubCode reference is accurate
+and is what stage ④ above points you to. Likewise the per-folder `python/CLAUDE.md`, `sql/CLAUDE.md`,
+`power_bi/CLAUDE.md`, and `reports/CLAUDE.md` were rewritten to describe only what's actually implemented
+(each says so in its own opening line) — treat them as reliable, not as the aspirational layer. Where
+`agent_docs/kpi_definitions.md` or `agent_docs/report_calendar.md` disagree with the code or with those
+CLAUDE.md files, trust the code.
 
 ## Commands
 
 No test suite, linter, or `requirements.txt` exists in this repo yet — don't assume `pytest`/`ruff` are
-configured. `python/CLAUDE.md` references a `python/tests/` layout and `utils/db.py`; neither exists.
+configured; `python/CLAUDE.md` confirms this directly.
 
 ```bash
 # Dependencies (no requirements.txt — install directly)
@@ -96,7 +122,7 @@ python python/ingestion/load_tac_data.py
 # 3. Validate the load — writes data/processed/validation_report.csv
 python python/transformation/validate_tac_data.py
 # or run the ad-hoc checks directly:
-mysql -u root -p nhs_finance < sql/views/v_validation_checks.sql
+mysql -u root -p nhs_silver < sql/views/v_validation_checks.sql
 
 # 4. Enrichment/benchmarking transforms
 python python/transformation/transform_tac_data.py
@@ -106,9 +132,10 @@ python python/reporting/export_for_powerbi.py
 ```
 
 DB connection settings (`DB_USER`, `DB_PASSWORD`, `DB_HOST`, `DB_PORT`) are hardcoded at the top of each
-`python/**/*.py` script (`root` / local MySQL on `127.0.0.1:3306`) rather than read from environment —
-this contradicts `python/CLAUDE.md`'s "never hardcode credentials" rule but is the current reality; update
-the constants in each script if your local MySQL differs.
+`python/**/*.py` script (`root` / local MySQL on `127.0.0.1:3306`) rather than read from environment — a
+known, intentional shortcut for a portfolio project that only ever runs against one local MySQL server (see
+`python/CLAUDE.md`), not an oversight to "fix" unasked. Update the constants in each script if your local
+MySQL differs.
 
 `data/raw/` (source Excel, ~170MB) and `data/processed/` (generated) are git-ignored — regenerate rather
 than expecting them to be present after a fresh clone.

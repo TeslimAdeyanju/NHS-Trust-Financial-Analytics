@@ -1,9 +1,9 @@
 -- NHS Finance Analytics — Benchmarking and Peer Analysis
 -- Cross-trust comparisons, peer groupings, and cost efficiency analysis
 -- All monetary values in £000s unless stated
--- Run against nhs_finance database after views are built
+-- Run against nhs_gold database after views are built
 
-USE nhs_finance;
+USE nhs_gold;
 
 
 -- ── 1. Trust size bands: income quartile groupings ─────────────────────────

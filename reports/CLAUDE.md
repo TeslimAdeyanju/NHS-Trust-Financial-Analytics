@@ -2,7 +2,7 @@
 
 This describes the one report type that actually exists in `reports/`:
 [`nhs_sector_financial_review_2324.md`](nhs_sector_financial_review_2324.md), an annual sector-level
-outturn analysis built on the `nhs_finance` data. There is no monthly or quarterly board-report pipeline,
+outturn analysis built on the `nhs_gold`/`nhs_silver` data. There is no monthly or quarterly board-report pipeline,
 and no budget/variance data source to report against — see the top-level `CLAUDE.md` for why.
 
 ## What this report is

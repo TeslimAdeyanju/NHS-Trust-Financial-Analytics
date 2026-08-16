@@ -30,15 +30,15 @@ Full technical documentation, including the full business case, methodology, and
 Data moves in one direction only — source to dashboard — with each stage owned by a different technology:
 
 <p align="center">
-<img src="docs/images/pipeline_architecture.png" width="480" alt="Six-stage pipeline architecture: NHS England source files are manually downloaded into data/raw/, ingested by load_tac_data.py into MySQL staging (nhs_stg), joined and upserted into MySQL analytics (nhs_finance) as a star schema with SQL views, exported by export_for_powerbi.py to CSV, and imported into the Power BI dashboard." />
+<img src="docs/images/pipeline_architecture.png" width="480" alt="Six-stage pipeline architecture: NHS England source files are manually downloaded into data/raw/, ingested by load_tac_data.py into MySQL staging (nhs_bronze), joined and upserted into MySQL analytics (nhs_silver) as a star schema, pivoted by SQL views into nhs_gold, exported by export_for_powerbi.py to CSV, and imported into the Power BI dashboard." />
 </p>
 
 | Stage | What it does |
 |-------|--------------|
 | ① NHS England (source) | NHS England's annual TAC publication — audited Trust accounts, consolidated and published as public data |
 | ② Raw Excel files | Six workbooks (~170MB) downloaded manually into `data/raw/` — a fixed, reproducible snapshot |
-| ③ MySQL staging (`nhs_stg`) | `load_tac_data.py` lands the data close to verbatim — minimal transformation, full auditability |
-| ④ MySQL analytics (`nhs_finance`) | Staging data resolved to ODS codes and upserted into a star schema; SQL views pivot SubCodes into KPI-ready tables |
+| ③ MySQL staging (`nhs_bronze`) | `load_tac_data.py` lands the data close to verbatim — minimal transformation, full auditability |
+| ④ MySQL analytics (`nhs_silver` → `nhs_gold`) | Staging data resolved to ODS codes and upserted into a star schema (`nhs_silver`); SQL views in `nhs_gold` pivot SubCodes into KPI-ready and full statutory P&L/Balance Sheet tables |
 | ⑤ CSV exports | `export_for_powerbi.py` writes 9 flat CSVs — portable, no database connection required |
 | ⑥ Power BI dashboard | 5-page interactive report — the only stage a non-technical end user actually interacts with |
 
@@ -85,31 +85,39 @@ This project applies real NHS finance conventions throughout:
 | SQL analytics | Analytical views for I&E, expenditure, workforce, KPIs, and sector scorecard |
 | Data quality | 10-query validation suite with expected-value assertions |
 | Financial KPIs | EBITDA margin · Pay % of income · Cost per WTE · Net surplus margin |
-| Power BI | 9-CSV export pipeline · 51 DAX measures · 5-page dashboard |
+| Power BI | 11-CSV export pipeline · 51 DAX measures · 5-page dashboard |
 | NHS domain knowledge | TAC subcode taxonomy · FReM conventions · sector benchmarks |
 
 ---
 
 ## Database schema
 
-Two MySQL databases:
+Three MySQL databases, medallion-style:
 
-**`nhs_stg`** — staging layer
+**`nhs_bronze`** — raw landing layer
 
 | Table | Description |
 |-------|-------------|
 | `stg_tac_raw` | Raw ingest from all 6 TAC Excel files |
 | `stg_provider_list` | ODS provider reference |
 
-**`nhs_finance`** — analytics layer
+**`nhs_silver`** — conformed layer
 
-| Table / View | Rows | Description |
+| Table | Rows | Description |
 |---|---|---|
 | `dim_trust` | 215 | Provider master — ODS code, sector, region, trust type |
 | `fct_tac` | 2,179,740 | Fact table: one row per org / year / subcode / data type |
-| `v_income_expenditure` | 624 | I&E per trust per year (SoCI — TAC02) |
+| `dim_subcode` | ~1,000 | SubCode → label reference, all 28 real TAC worksheets |
+
+**`nhs_gold`** — curated analytical views, referencing `nhs_silver.*` tables
+
+| View | Rows | Description |
+|---|---|---|
+| `v_income_expenditure` | 624 | I&E summary per trust per year (SoCI — TAC02) |
+| `v_profit_and_loss` | 624 | Full statutory P&L — every real TAC02 SoCI/SOC line |
 | `v_expenditure_breakdown` | 624 | Pay / non-pay / drugs / depreciation split (TAC08) |
 | `v_workforce` | 624 | Staff costs and WTE (TAC09) |
+| `v_balance_sheet` | 624 | Full statutory Balance Sheet — all 40 TAC03 SoFP `BAL*` lines |
 | `v_kpis` | 624 | Computed KPIs with RAG status |
 | `v_trust_annual_scorecard` | 624 | Wide view combining all metrics |
 
@@ -139,7 +147,7 @@ portfolio-01-nhs-trust-financial-analytics/
 │   │   └── TAC_NHS_foundation_trusts_2023-24.xlsx
 │   └── processed/
 │       ├── validation_report.csv      ← Output of validate_tac_data.py — stage ④
-│       └── powerbi_export/            ← Nine CSV files for Power BI — stage ⑤
+│       └── powerbi_export/            ← Eleven CSV files for Power BI — stage ⑤
 │           ├── dim_trust.csv
 │           ├── dim_financial_year.csv
 │           ├── ie_summary.csv
@@ -148,6 +156,8 @@ portfolio-01-nhs-trust-financial-analytics/
 │           ├── kpis.csv
 │           ├── income_detail.csv
 │           ├── expenditure_detail.csv
+│           ├── profit_and_loss.csv
+│           ├── balance_sheet.csv
 │           └── sector_benchmarks.csv
 │
 ├── docs/
@@ -160,7 +170,8 @@ portfolio-01-nhs-trust-financial-analytics/
 ├── python/
 │   ├── CLAUDE.md                      ← Python layer coding standards
 │   ├── ingestion/
-│   │   └── load_tac_data.py           ← Main ingestion script — stages ③④
+│   │   ├── load_tac_data.py           ← Main ingestion script — stages ③④
+│   │   └── build_subcode_reference.py ← One-off dim_subcode label generator (not in the daily pipeline)
 │   ├── transformation/                ← Enrichment and validation — stage ④
 │   │   ├── transform_tac_data.py
 │   │   └── validate_tac_data.py
@@ -174,8 +185,10 @@ portfolio-01-nhs-trust-financial-analytics/
 │   │   └── create_tables.sql          ← PostgreSQL equivalent (reference)
 │   ├── views/                         ← Standalone, canonical version of each v_* view — stage ④
 │   │   ├── v_income_expenditure.sql
+│   │   ├── v_profit_and_loss.sql
 │   │   ├── v_expenditure_breakdown.sql
 │   │   ├── v_workforce.sql
+│   │   ├── v_balance_sheet.sql
 │   │   ├── v_kpis.sql
 │   │   ├── v_trust_annual_scorecard.sql
 │   │   └── v_validation_checks.sql    ← 10 data quality checks with expected values
@@ -217,6 +230,8 @@ portfolio-01-nhs-trust-financial-analytics/
 | `workforce.csv` | 624 | WTE and staff cost analysis |
 | `income_detail.csv` | 9,144 | Income drilldown by TAC line item |
 | `expenditure_detail.csv` | 11,856 | Cost drilldown by TAC line item |
+| `profit_and_loss.csv` | ~624 | Full statutory P&L — every real TAC02 SoCI/SOC line |
+| `balance_sheet.csv` | ~624 | Full statutory Balance Sheet — all 40 TAC03 SoFP lines |
 | `sector_benchmarks.csv` | 30 | Aggregated sector benchmarks |
 
 ---
@@ -237,7 +252,7 @@ python python/ingestion/load_tac_data.py
 
 # 4. Export for Power BI
 python python/reporting/export_for_powerbi.py
-#    Writes 9 CSVs to data/processed/powerbi_export/
+#    Writes 11 CSVs to data/processed/powerbi_export/
 
 # 5. Build the dashboard
 #    Follow power_bi/setup_guide.md

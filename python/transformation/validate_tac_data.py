@@ -1,7 +1,8 @@
 """
 validate_tac_data.py
 --------------------
-Post-load business rule validation for NHS TAC data in nhs_finance.
+Post-load business rule validation for NHS TAC data across nhs_silver (conformed dims/fact)
+and nhs_gold (analytical views).
 
 Runs after load_tac_data.py has populated fct_tac and dim_trust.
 Checks are classified as CRITICAL (pipeline should halt) or WARNING (log and continue).
@@ -34,7 +35,7 @@ DB_USER     = "root"
 DB_PASSWORD = "Password1234"
 DB_HOST     = "127.0.0.1"
 DB_PORT     = 3306
-FACT_DB     = "nhs_finance"
+SILVER_DB   = "nhs_silver"   # row-level checks connect here; view-level checks qualify nhs_gold.*
 
 REPORT_PATH = Path("data/processed/validation_report.csv")
 
@@ -143,7 +144,7 @@ def check_income_totals(conn) -> None:
     """Sector total income for 2023/24 should be within expected range."""
     row = conn.execute(text("""
         SELECT SUM(total_income_000s) / 1e6
-        FROM v_income_expenditure
+        FROM nhs_gold.v_income_expenditure
         WHERE financial_year = '2023/24'
     """)).fetchone()
     total_bn = float(row[0]) if row[0] else 0
@@ -160,7 +161,7 @@ def check_deficit_count(conn) -> None:
     """Number of deficit trusts in 2023/24 should match published NHS England figures."""
     count = conn.execute(text("""
         SELECT SUM(is_deficit)
-        FROM v_trust_annual_scorecard
+        FROM nhs_gold.v_trust_annual_scorecard
         WHERE financial_year = '2023/24'
     """)).scalar() or 0
     lo, hi = EXPECTED["deficit_trusts_2324"]
@@ -176,7 +177,7 @@ def check_ebitda_margin(conn) -> None:
     """Average EBITDA margin 2023/24 should be in the expected band."""
     row = conn.execute(text("""
         SELECT ROUND(AVG(ebitda_margin_pct), 1)
-        FROM v_kpis
+        FROM nhs_gold.v_kpis
         WHERE financial_year = '2023/24'
           AND total_income_000s > 0
     """)).fetchone()
@@ -194,7 +195,7 @@ def check_pay_pct_acute(conn) -> None:
     """Average pay % of income for acute trusts should be within NHS benchmark range."""
     row = conn.execute(text("""
         SELECT ROUND(AVG(pay_pct_income), 1)
-        FROM v_kpis
+        FROM nhs_gold.v_kpis
         WHERE financial_year = '2023/24'
           AND sector = 'Acute'
           AND total_income_000s > 0
@@ -213,7 +214,7 @@ def check_income_expenditure_balance(conn) -> None:
     """For each trust-year, operating_surplus should equal total_income - total_expenditure."""
     mismatched = conn.execute(text("""
         SELECT COUNT(*)
-        FROM v_income_expenditure
+        FROM nhs_gold.v_income_expenditure
         WHERE ABS(
             (total_income_000s - total_expenditure_000s) - operating_surplus_000s
         ) > 1000   -- allow £1m rounding tolerance
@@ -231,7 +232,7 @@ def check_wte_plausibility(conn) -> None:
     """Total WTE should be positive and within a plausible range per trust."""
     implausible = conn.execute(text("""
         SELECT COUNT(*)
-        FROM v_workforce
+        FROM nhs_gold.v_workforce
         WHERE total_wte IS NOT NULL
           AND (total_wte <= 0 OR total_wte > 50000)
     """)).scalar() or 0
@@ -290,7 +291,7 @@ def write_report() -> None:
 
 
 def main() -> None:
-    url = f"mysql+pymysql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{FACT_DB}?charset=utf8mb4"
+    url = f"mysql+pymysql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{SILVER_DB}?charset=utf8mb4"
     engine = create_engine(url, echo=False)
 
     log.info("=" * 60)

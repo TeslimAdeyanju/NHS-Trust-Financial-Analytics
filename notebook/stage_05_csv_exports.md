@@ -1,13 +1,14 @@
 # Stage ⑤ — CSV Exports
 
 > `data/processed/powerbi_export/` — populated by `python/reporting/export_for_powerbi.py`, which
-> queries the views and tables from [stage ④](stage_04_mysql_analytics.md) and writes nine CSVs in
-> roughly 30 seconds. This stage's only job is portability: turn a live database dependency into flat
-> files any tool — Power BI, a reviewer with no MySQL access — can consume.
+> queries the views and tables from [stage ④](stage_04_mysql_analytics.md) — connecting to `nhs_gold`,
+> fully-qualifying `nhs_silver.dim_trust`/`nhs_silver.dim_subcode` for the joins that need them — and
+> writes eleven CSVs in roughly 30 seconds. This stage's only job is portability: turn a live database
+> dependency into flat files any tool — Power BI, a reviewer with no MySQL access — can consume.
 
 ---
 
-## One Helper, Eight Callers
+## One Helper, Ten Callers
 
 Every export funnels through a single function:
 
@@ -20,11 +21,12 @@ def export_query(engine, sql: str, filename: str, **params) -> int:
     return len(df)
 ```
 
-`main()` just calls eight `export_*(engine)` functions in sequence — `export_dimensions` (writes both
+`main()` just calls ten `export_*(engine)` functions in sequence — `export_dimensions` (writes both
 `dim_trust.csv` and `dim_financial_year.csv` in one call), `export_ie_summary`,
 `export_expenditure_breakdown`, `export_workforce`, `export_kpis`, `export_income_detail`,
-`export_expenditure_detail`, `export_sector_benchmarks` — nine files total. No orchestration logic beyond
-that: each function owns one SQL query and one output file.
+`export_expenditure_detail`, `export_profit_and_loss`, `export_balance_sheet`,
+`export_sector_benchmarks` — eleven files total. No orchestration logic beyond that: each function owns
+one SQL query and one output file.
 
 ---
 
@@ -58,7 +60,8 @@ the file, every time.
 
 `export_income_detail()` and `export_expenditure_detail()` are the only two exports that query `fct_tac`
 directly instead of a pre-aggregated `v_*` view — because a drilldown-by-line-item table is exactly the
-one shape none of the four summary views produce:
+one shape none of the summary views produce (including `v_profit_and_loss`/`v_balance_sheet`, which are
+one row per trust per year, not one row per line item):
 
 ```sql
 SELECT
@@ -93,18 +96,20 @@ sector-level sums in £000s run to eight figures and stop being readable on a be
 
 ---
 
-## The Nine Files
+## The Eleven Files
 
 | File | Source | Grain |
 |------|--------|-------|
-| `dim_trust.csv` | `dim_trust` table | One row per trust (215) |
-| `dim_financial_year.csv` | `dim_financial_year` table | One row per financial year (5) |
+| `dim_trust.csv` | `nhs_silver.dim_trust` table | One row per trust (215) |
+| `dim_financial_year.csv` | `nhs_silver.dim_financial_year` table | One row per financial year (5) |
 | `ie_summary.csv` | `v_income_expenditure` | One row per trust per year |
 | `expenditure_breakdown.csv` | `v_expenditure_breakdown` | One row per trust per year |
 | `workforce.csv` | `v_workforce` | One row per trust per year |
 | `kpis.csv` | `v_kpis` | One row per trust per year |
-| `income_detail.csv` | `fct_tac` + `dim_subcode`, filtered | One row per trust per year per income SubCode |
-| `expenditure_detail.csv` | `fct_tac` + `dim_subcode`, filtered | One row per trust per year per expenditure SubCode |
+| `income_detail.csv` | `nhs_silver.fct_tac` + `dim_subcode`, filtered | One row per trust per year per income SubCode |
+| `expenditure_detail.csv` | `nhs_silver.fct_tac` + `dim_subcode`, filtered | One row per trust per year per expenditure SubCode |
+| `profit_and_loss.csv` | `v_profit_and_loss` | One row per trust per year — full statutory P&L, ~27 lines pivoted into columns |
+| `balance_sheet.csv` | `v_balance_sheet` | One row per trust per year — full statutory Balance Sheet, 40 `BAL*` lines pivoted into columns |
 | `sector_benchmarks.csv` | `v_kpis`, aggregated | One row per financial year per sector per trust type |
 
 Full column-by-column schema for each file is in `PROJECT_DOCUMENTATION.md`, stage ⑤.
@@ -127,7 +132,7 @@ Full column-by-column schema for each file is in `PROJECT_DOCUMENTATION.md`, sta
 
 | File | What to Read |
 |------|-------------|
-| [python/reporting/export_for_powerbi.py](../python/reporting/export_for_powerbi.py) | Full script — `export_query()` plus all eight `export_*()` functions |
+| [python/reporting/export_for_powerbi.py](../python/reporting/export_for_powerbi.py) | Full script — `export_query()` plus all ten `export_*()` functions |
 | [PROJECT_DOCUMENTATION.md](../PROJECT_DOCUMENTATION.md), stage ⑤ | The narrative version, plus the full per-file column schema and the Power BI model diagram |
 
 ---

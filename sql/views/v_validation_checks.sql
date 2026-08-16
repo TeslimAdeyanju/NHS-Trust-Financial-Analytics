@@ -2,7 +2,7 @@
 -- Run these after each data load to confirm integrity
 -- All monetary values in £000s
 
-USE nhs_finance;
+USE nhs_silver;
 
 -- ── 1. Row counts by year and trust type ──────────────────────────────────
 SELECT financial_year,
@@ -32,7 +32,7 @@ SELECT financial_year,
        FORMAT(SUM(total_expenditure_000s) / 1000000, 1)    AS total_exp_bn,
        FORMAT(SUM(operating_surplus_000s) / 1000000, 1)    AS op_surplus_bn,
        COUNT(DISTINCT org_code)                             AS providers
-FROM v_income_expenditure
+FROM nhs_gold.v_income_expenditure
 GROUP BY financial_year
 ORDER BY financial_year;
 -- Expected trend: income rising ~7-8% per year, expenditure growing faster → worsening surplus
@@ -44,7 +44,7 @@ SELECT sector,
        ROUND(AVG(ebitda_margin_pct), 1)     AS avg_ebitda_margin_pct,
        ROUND(AVG(pay_pct_income), 1)        AS avg_pay_pct_income,
        ROUND(AVG(net_surplus_margin_pct), 1) AS avg_net_surplus_pct
-FROM v_kpis
+FROM nhs_gold.v_kpis
 WHERE financial_year = '2023/24'
   AND total_income_000s > 0
 GROUP BY sector, trust_type
@@ -60,7 +60,7 @@ SELECT
                THEN operating_surplus_000s ELSE 0 END) / 1000, 1) AS total_deficit_m,
     FORMAT(SUM(CASE WHEN operating_surplus_000s >= 0
                THEN operating_surplus_000s ELSE 0 END) / 1000, 1) AS total_surplus_m
-FROM v_income_expenditure
+FROM nhs_gold.v_income_expenditure
 WHERE financial_year = '2023/24';
 -- Expected: ~60% of trusts in deficit in 2023/24, total sector deficit ~£1.5-2.5bn
 
@@ -71,7 +71,7 @@ SELECT organisation_name,
        FORMAT(total_income_000s / 1000, 1)        AS total_income_m,
        FORMAT(operating_surplus_000s / 1000, 1)   AS op_surplus_m,
        CONCAT(ROUND(net_surplus_margin_pct, 1), '%') AS net_margin
-FROM v_kpis
+FROM nhs_gold.v_kpis
 WHERE financial_year = '2023/24'
 ORDER BY total_income_000s DESC
 LIMIT 10;
@@ -83,7 +83,7 @@ SELECT organisation_name,
        FORMAT(total_income_000s / 1000, 1)        AS total_income_m,
        FORMAT(operating_surplus_000s / 1000, 1)   AS op_surplus_m,
        CONCAT(ROUND(ebitda_margin_pct, 1), '%')   AS ebitda_margin
-FROM v_kpis
+FROM nhs_gold.v_kpis
 WHERE financial_year = '2023/24'
   AND operating_surplus_000s IS NOT NULL
 ORDER BY operating_surplus_000s ASC
@@ -96,7 +96,7 @@ SELECT financial_year,
        FORMAT(SUM(non_pay_000s) / 1000000, 1)       AS total_non_pay_bn,
        FORMAT(SUM(total_expenditure_000s)/1000000,1) AS total_exp_bn,
        ROUND(SUM(pay_000s) / NULLIF(SUM(total_expenditure_000s),0) * 100, 1) AS pay_pct_exp
-FROM v_expenditure_breakdown
+FROM nhs_gold.v_expenditure_breakdown
 GROUP BY financial_year
 ORDER BY financial_year;
 
@@ -105,7 +105,7 @@ SELECT financial_year,
        FORMAT(SUM(total_wte), 0)                   AS total_wte,
        FORMAT(SUM(total_staff_cost_000s)/1000000,1) AS staff_cost_bn,
        ROUND(SUM(total_staff_cost_000s) / NULLIF(SUM(total_wte),0) / 1000, 1) AS avg_cost_per_wte_k
-FROM v_workforce
+FROM nhs_gold.v_workforce
 WHERE total_wte IS NOT NULL
 GROUP BY financial_year
 ORDER BY financial_year;

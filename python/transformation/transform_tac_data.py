@@ -38,7 +38,7 @@ DB_USER     = "root"
 DB_PASSWORD = "Password1234"
 DB_HOST     = "127.0.0.1"
 DB_PORT     = 3306
-FACT_DB     = "nhs_finance"
+GOLD_DB     = "nhs_gold"   # views live here; nhs_silver.* is qualified in queries that need it
 
 PROCESSED_DIR    = Path("data/processed")
 POWERBI_DIR      = PROCESSED_DIR / "powerbi_export"
@@ -80,7 +80,7 @@ LARGE_TRUST_INCOME_THRESHOLD_000S = 1_000_000
 def get_engine():
     url = (
         f"mysql+pymysql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}"
-        f"/{FACT_DB}?charset=utf8mb4"
+        f"/{GOLD_DB}?charset=utf8mb4"
     )
     return create_engine(url, echo=False)
 
@@ -199,9 +199,9 @@ def build_income_detail(engine) -> pd.DataFrame:
             sc.description      AS sub_code_description,
             sc.is_subtotal,
             f.total_000s        AS value_000s
-        FROM fct_tac f
-        JOIN dim_trust   t  ON f.org_code = t.org_code
-        JOIN dim_subcode sc ON f.sub_code = sc.sub_code
+        FROM nhs_silver.fct_tac f
+        JOIN nhs_silver.dim_trust   t  ON f.org_code = t.org_code
+        JOIN nhs_silver.dim_subcode sc ON f.sub_code = sc.sub_code
         WHERE f.worksheet_name IN ('TAC06 Op Inc 1', 'TAC07 Op Inc 2', 'TAC02 SoCI')
           AND sc.analytics_category IN ('PATIENT_INCOME', 'OTHER_INCOME', 'TOTAL_INCOME')
         ORDER BY f.financial_year, t.org_code, f.worksheet_name, f.sub_code
@@ -228,9 +228,9 @@ def build_expenditure_detail(engine) -> pd.DataFrame:
             sc.analytics_category,
             sc.is_subtotal,
             f.total_000s        AS value_000s
-        FROM fct_tac f
-        JOIN dim_trust   t  ON f.org_code = t.org_code
-        JOIN dim_subcode sc ON f.sub_code = sc.sub_code
+        FROM nhs_silver.fct_tac f
+        JOIN nhs_silver.dim_trust   t  ON f.org_code = t.org_code
+        JOIN nhs_silver.dim_subcode sc ON f.sub_code = sc.sub_code
         WHERE f.worksheet_name = 'TAC08 Op Exp'
         ORDER BY f.financial_year, t.org_code, f.sub_code
     """
@@ -276,8 +276,8 @@ def main() -> None:
     expenditure_detail = build_expenditure_detail(engine)
 
     # Dimension tables
-    dim_trust = pd.read_sql("SELECT * FROM dim_trust", engine)
-    dim_year  = pd.read_sql("SELECT * FROM dim_financial_year", engine)
+    dim_trust = pd.read_sql("SELECT * FROM nhs_silver.dim_trust", engine)
+    dim_year  = pd.read_sql("SELECT * FROM nhs_silver.dim_financial_year", engine)
 
     # ── Write exports ────────────────────────────────────────────────────────
     exports = {

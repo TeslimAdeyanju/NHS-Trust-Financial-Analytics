@@ -23,6 +23,8 @@ import is done (see the model diagram in `PROJECT_DOCUMENTATION.md`, stage ⑤):
 | `workforce.csv` | `fact_workforce` | 624 | Staff costs and WTE |
 | `income_detail.csv` | `fact_income_detail` | 9,144 | Income by line item |
 | `expenditure_detail.csv` | `fact_expenditure_detail` | 11,856 | Expenditure by line item |
+| `profit_and_loss.csv` | `fact_profit_and_loss` | ~624 | Full statutory P&L (all real TAC02 SoCI/SOC lines) |
+| `balance_sheet.csv` | `fact_balance_sheet` | ~624 | Full statutory Balance Sheet (all 40 TAC03 SoFP `BAL*` lines) |
 | `sector_benchmarks.csv` | `fact_sector_benchmarks` | 30 | Aggregated sector totals |
 
 ### Import steps
@@ -53,6 +55,10 @@ fact_income_detail[org_code]            → dim_trust[org_code]
 fact_income_detail[financial_year]      → dim_financial_year[financial_year]
 fact_expenditure_detail[org_code]       → dim_trust[org_code]
 fact_expenditure_detail[financial_year] → dim_financial_year[financial_year]
+fact_profit_and_loss[org_code]          → dim_trust[org_code]
+fact_profit_and_loss[financial_year]    → dim_financial_year[financial_year]
+fact_balance_sheet[org_code]            → dim_trust[org_code]
+fact_balance_sheet[financial_year]      → dim_financial_year[financial_year]
 fact_sector_benchmarks[financial_year]  → dim_financial_year[financial_year]
 ```
 

@@ -20,7 +20,7 @@
 --       for some years. Use STA0410 (total WTE) for benchmarking; treat staff-group WTE
 --       breakdown as indicative only.
 
-USE nhs_finance;
+USE nhs_gold;
 
 DROP VIEW IF EXISTS v_workforce;
 CREATE VIEW v_workforce AS
@@ -48,8 +48,8 @@ SELECT
     MAX(CASE WHEN f.sub_code = 'STA0530' THEN f.total_000s END) AS total_days_lost_sickness,
     MAX(CASE WHEN f.sub_code = 'STA0550' THEN f.total_000s END) AS avg_days_lost_per_wte
 
-FROM fct_tac f
-JOIN dim_trust t ON f.org_code = t.org_code
+FROM nhs_silver.fct_tac f
+JOIN nhs_silver.dim_trust t ON f.org_code = t.org_code
 WHERE f.worksheet_name = 'TAC09 Staff'
 GROUP BY
     t.org_code,

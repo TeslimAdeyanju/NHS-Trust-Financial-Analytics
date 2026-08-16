@@ -2,7 +2,7 @@
 -- Ready-to-run analytical queries for portfolio presentation
 -- All monetary values in £000s
 
-USE nhs_finance;
+USE nhs_gold;
 
 -- ── 1. National I&E trend 2021/22 to 2023/24 ──────────────────────────────
 SELECT
