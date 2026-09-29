@@ -1,7 +1,7 @@
 # NHS Trust Financial Analytics — Project Documentation
 
 > Design, architecture, and implementation of an end-to-end financial analytics pipeline built on real
-> NHS England data — the business problem, the engineering decisions behind the system, and the findings
+> NHS England data, the business problem, the engineering decisions behind the system, and the findings
 > it surfaced.
 
 ---
