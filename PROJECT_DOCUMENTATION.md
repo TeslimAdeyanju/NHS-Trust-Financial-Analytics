@@ -268,40 +268,7 @@ data/raw/
 belongs in version control (exact filenames listed again in
 [Appendix A](#appendix-a--environment-setup-and-running-the-pipeline) if reproducing this locally).
 
-NHS England also publishes a seventh file — `TAC_illustrative_2023-24.xlsx` — a reference schema showing
-every SubCode and its description rather than real trust data. I downloaded it too, but the pipeline
-explicitly excludes it from ingestion:
 
-```python
-files = sorted(
-    p for p in RAW_DIR.glob("TAC_NHS_*.xlsx")
-    if "illustrative" not in p.name.lower()
-)
-```
-
-Once a file is on disk, the filename itself is the only place two critical facts live — neither appears
-inside the workbook, so this is the first piece of code that runs on each source file, before any sheet is
-even opened:
-
-```python
-YEAR_RE = re.compile(r"(\d{4})-(\d{2})")
-
-def filename_to_financial_year(filename: str) -> str:
-    match = YEAR_RE.search(filename)
-    if not match:
-        raise ValueError(f"Cannot extract financial year from: {filename}")
-    return f"{match.group(1)}/{match.group(2)}"
-
-def filename_to_trust_type(filename: str) -> str:
-    return "FOUNDATION_TRUST" if "foundation" in filename.lower() else "NHS_TRUST"
-```
-
-`TAC_NHS_trusts_2023-24.xlsx` becomes `financial_year = "2023/24"`, `trust_type = "NHS_TRUST"` — both
-values get written onto every row the file produces, all the way through to `fct_tac`. This is also why
-the exact filenames matter: rename a file and the pipeline mis-tags every row inside it.
-
-*Deeper notes on the raw file structure and the data-quality quirks I had to handle are written up in
-[`notebook/stage_02_raw_excel_files.md`](notebook/stage_02_raw_excel_files.md).*
 
 ### What's inside each file
 
@@ -355,21 +322,34 @@ schedules it didn't pre-seed.
 
 ### What is the MainCode convention?
 
-Every row has a MainCode that identifies which column of the original TAC spreadsheet it came from:
+Every row has a `MainCode`. It identifies the TAC schedule, whether the value belongs to the workbook's
+Current Year or Prior Year, and the table within that schedule. Some schedules add a suffix to identify a
+category, such as the staff group in TAC09.
 
 ```text
-Format: A{sheet_number}{CY|PY}{table_number}
+Base format: A{sheet_number}{CY|PY}{table_number}[optional suffix]
 
 Examples:
-  A02CY01  →  Sheet TAC02 (SoCI),  Current Year,  Table 1
-  A09CY01P →  Sheet TAC09 (Staff), Current Year,  Table 1, Permanent staff column
-  A08PY01  →  Sheet TAC08 (OpExp), Prior Year,    Table 1
+   A02CY01  →  TAC02 (SoCI),  Current Year, Table 1
+   A09CY01P →  TAC09 (Staff), Current Year, Table 1, Permanent staff category (P)
+   A08PY01  →  TAC08 (OpExp), Prior Year,   Table 1
 ```
 
-**Important:** Each annual file contains **both Current Year (CY) and Prior Year (PY) data**. The 2023/24
-file contains all of 2023/24 (CY) AND all of 2022/23 again (PY) — because the accounts show both years
-side by side for comparison. To avoid double-counting when combining 3 years of files, the pipeline keeps
-**CY rows only**.
+**How CY and PY relate across files:** CY and PY are relative to the financial year named by each workbook;
+they are not fixed year labels. NHS accounts show the current and preceding financial years side by side.
+For example, the 2023/24 workbook contains 2023/24 values marked `CY` and repeats 2022/23 values marked
+`PY`. The 2022/23 workbook also contains 2022/23 values, this time marked `CY`.
+
+| Workbook | Rows marked CY | Rows marked PY |
+| ---------- | ---------------- | ---------------- |
+| 2021/22  | 2021/22        | 2020/21        |
+| 2022/23  | 2022/23        | 2021/22        |
+| 2023/24  | 2023/24        | 2022/23        |
+
+Therefore, when combining these workbooks into a multi-year dataset, the pipeline keeps only rows marked
+`CY`. This gives one copy of each target year (2021/22, 2022/23, and 2023/24) and drops the repeated
+comparison-year rows marked `PY`. In the ingestion code, `year_type` is inferred from `MainCode`, and rows
+whose `year_type` is `PY` are filtered out.
 
 ### What TAC schedules are there?
 

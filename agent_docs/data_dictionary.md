@@ -33,17 +33,30 @@ Every data file contains a sheet called **"All data"** with exactly **7 columns*
 
 ### MainCode convention
 
-Format: `A{sheet_number}{CY|PY}{table_number}`
+Base format: `A{sheet_number}{CY|PY}{table_number}[optional suffix]`
 
 | Part | Meaning | Example |
 |------|---------|---------|
 | `A02` | TAC sheet number (02 = SoCI) | A02, A06, A08, A09 |
-| `CY` | Current Year data | 2023/24 in the 2023/24 file |
-| `PY` | Prior Year data | 2022/23 in the 2023/24 file |
+| `CY` | Current Year relative to the workbook's financial year | 2023/24 in the 2023/24 file |
+| `PY` | Prior Year relative to the workbook's financial year | 2022/23 in the 2023/24 file |
 | `01` | Table ID within sheet | 01, 02, 03… |
+| Optional suffix | A schedule-specific category; for TAC09, `P` means permanent staff and `O` means other staff | `A09CY01P`, `A09CY01O` |
 
-**Important:** Each annual file contains BOTH current year (CY) and prior year (PY) rows.
-When building a multi-year series, use CY rows only to avoid double-counting.
+**How the year labels work:** `CY` and `PY` are relative to the financial year named by the workbook, not
+fixed labels across all files. NHS accounts show two years side by side. The 2023/24 workbook has 2023/24
+values marked `CY` and 2022/23 values marked `PY`; the 2022/23 workbook also has 2022/23 values, marked
+`CY`.
+
+| Workbook | Rows marked CY | Rows marked PY |
+|----------|----------------|----------------|
+| 2021/22  | 2021/22        | 2020/21        |
+| 2022/23  | 2022/23        | 2021/22        |
+| 2023/24  | 2023/24        | 2022/23        |
+
+The ingestion pipeline keeps only `CY` rows when combining the annual workbooks. This retains one copy of
+each target financial year and drops the repeated comparison-year values carried as `PY`. In
+`load_tac_data.py`, the year type is inferred from `MainCode` and rows identified as `PY` are filtered out.
 
 ### "List of Providers" sheet
 
