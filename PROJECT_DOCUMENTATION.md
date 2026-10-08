@@ -238,6 +238,8 @@ This stage is entirely external to the system I built — it's the authoritative
 consuming, not producing, and there's no API: downloading requires accepting NHS England's terms of use on
 the page itself.
 
+For the source publication, cadence, and data-provenance context, see [Stage ① — NHS England (Source)](notebook/stage_01_nhs_england_source.md).
+
 ---
 
 ## ② RAW EXCEL FILES
@@ -272,100 +274,13 @@ belongs in version control (exact filenames listed again in
 
 ### What's inside each file
 
-Each file contains multiple sheets. Two sheets matter for this project:
+Each workbook has two sheets used by the pipeline: **"List of Providers"** maps trust names to ODS codes,
+region, and sector; **"All Data"** contains the reported financial figures in long format, one row per
+reported line. The pipeline uses the provider list to add trust identifiers and keeps Current Year (CY)
+figures from "All Data" to avoid repeating prior-year comparisons.
 
-**Sheet 1 — "List of Providers"**: A lookup table mapping each Trust's full legal name to its ODS code,
-region, and sector.
-
-| Column | Example |
-|--------|---------|
-| Full name of Provider | `Barts Health NHS Trust` |
-| NHS code | `R1H` |
-| Region | `London` |
-| Sector | `Acute` |
-
-**Sheet 2 — "All data"**: The actual financial data in **long/narrow format** — every financial line for
-every Trust in one table with exactly 7 columns.
-
-| Column | Type | Description | Example |
-|--------|------|-------------|---------|
-| OrganisationName | Text | Full trust name | `Barts Health NHS Trust` |
-| WorkSheetName | Text | TAC schedule (which financial statement) | `TAC02 SoCI` |
-| TableID | Integer | Table number within that schedule | `1` |
-| MainCode | Text | Column reference encoding year type and table | `A02CY01` |
-| RowNumber | Integer | Row position in the original form | `12` |
-| SubCode | Text | Unique line item identifier | `SCI0100A` |
-| Total | Integer | Value in **£000s** (£ thousands) | `350689` |
-
-### What is a SubCode?
-
-A SubCode is the most granular identifier in the dataset — it uniquely identifies a single financial line
-item within a single TAC schedule. For example:
-
-| SubCode | Meaning |
-|---------|---------|
-| `SCI0100A` | Operating income from patient care activities (TAC02 — the P&L) |
-| `SCI0125A` | Total operating expenses (TAC02) |
-| `SCI0140A` | Operating surplus/(deficit) (TAC02) |
-| `SCI0240` | Net surplus/(deficit) for the year (TAC02) |
-| `EXP0130` | Staff and executive directors costs (TAC08 — Expenditure schedule) |
-| `EXP0170` | Drugs costs (TAC08) |
-| `STA0250` | Total staff costs (TAC09 — Workforce schedule) |
-| `STA0410` | Total average WTE (whole-time equivalent headcount) |
-
-For a Trust like Barts Health NHS Trust (`R1H`), in financial year 2023/24, there are approximately
-**10,000+ rows** in the "All data" sheet — one for each SubCode across every TAC schedule the workbook
-uses. NHS England's own TAC numbering runs to `TAC29`; this project's `dim_worksheet` table ends up with
-30 distinct schedule names once real data from all three years is loaded — see
-[`notebook/stage_04_mysql_analytics.md`](notebook/stage_04_mysql_analytics.md) for how the schema handles
-schedules it didn't pre-seed.
-
-### What is the MainCode convention?
-
-Every row has a `MainCode`. It identifies the TAC schedule, whether the value belongs to the workbook's
-Current Year or Prior Year, and the table within that schedule. Some schedules add a suffix to identify a
-category, such as the staff group in TAC09.
-
-```text
-Base format: A{sheet_number}{CY|PY}{table_number}[optional suffix]
-
-Examples:
-   A02CY01  →  TAC02 (SoCI),  Current Year, Table 1
-   A09CY01P →  TAC09 (Staff), Current Year, Table 1, Permanent staff category (P)
-   A08PY01  →  TAC08 (OpExp), Prior Year,   Table 1
-```
-
-**How CY and PY relate across files:** CY and PY are relative to the financial year named by each workbook;
-they are not fixed year labels. NHS accounts show the current and preceding financial years side by side.
-For example, the 2023/24 workbook contains 2023/24 values marked `CY` and repeats 2022/23 values marked
-`PY`. The 2022/23 workbook also contains 2022/23 values, this time marked `CY`.
-
-| Workbook | Rows marked CY | Rows marked PY |
-| ---------- | ---------------- | ---------------- |
-| 2021/22  | 2021/22        | 2020/21        |
-| 2022/23  | 2022/23        | 2021/22        |
-| 2023/24  | 2023/24        | 2022/23        |
-
-Therefore, when combining these workbooks into a multi-year dataset, the pipeline keeps only rows marked
-`CY`. This gives one copy of each target year (2021/22, 2022/23, and 2023/24) and drops the repeated
-comparison-year rows marked `PY`. In the ingestion code, `year_type` is inferred from `MainCode`, and rows
-whose `year_type` is `PY` are filtered out.
-
-### What TAC schedules are there?
-
-| Schedule | Full Name | Key Data |
-|----------|-----------|----------|
-| TAC02 SoCI | Statement of Comprehensive Income | Income and expenditure summary (the P&L) |
-| TAC03 SoFP | Statement of Financial Position | Balance sheet (assets, liabilities, equity) |
-| TAC05 SoCF | Statement of Cash Flows | Cash movements |
-| TAC06 Op Inc 1 | Operating Income — Patient Care | Income by activity type and commissioner source |
-| TAC07 Op Inc 2 | Operating Income — Other | Research, education, commercial income |
-| TAC08 Op Exp | Operating Expenditure | Pay, drugs, supplies, clinical negligence, depreciation |
-| TAC09 Staff | Staff Costs and Workforce | Pay by staff group, WTE headcount |
-| TAC11 Finance | Finance and Other | Interest, PDC dividends, impairments |
-| TAC14 PPE | Property, Plant and Equipment | Fixed assets |
-| TAC18 Receivables | Debtors | Money owed to the Trust |
-| TAC20 Payables | Creditors | Money the Trust owes |
+For the field definitions, a worked example that includes `OrganisationName`, and details of how `MainCode`
+and CY/PY are interpreted, see [Stage ② — Raw Excel Files](notebook/stage_02_raw_excel_files.md).
 
 ---
 
@@ -376,6 +291,8 @@ data into a queryable form with the *minimum* transformation applied — one row
 (organisation, worksheet, SubCode), essentially as read off the sheet, plus a name-to-ODS-code lookup
 table. I deliberately kept this stage "dumb": no joins, no pivoting, no business logic — just a faithful,
 query-able landing zone for what NHS England actually published.
+
+For the detailed staging walkthrough, including the load and validation steps, see [Stage ③ — MySQL Staging](notebook/stage_03_mysql_staging.md).
 
 ### Where this data actually lives
 
@@ -534,6 +451,8 @@ the provider list to resolve each organisation name to its 3-character ODS code,
 into the star schema below, and refreshes `dim_trust`. This is where the raw, EAV-shaped staging data
 becomes a conformed, indexed fact table with proper keys. `nhs_gold` sits on top of it, holding only the
 SQL views that pivot `nhs_silver.fct_tac` into KPI-ready and statement-shaped output.
+
+For the detailed schema and analytics walkthrough, see [Stage ④ — MySQL Analytics](notebook/stage_04_mysql_analytics.md).
 
 ### Why the fact table is kept in long/narrow format
 
@@ -978,6 +897,8 @@ BI (or any other tool, or a reviewer with no MySQL access) can consume without a
 all. Power BI can alternatively connect directly to MySQL in DirectQuery mode — the views were designed to
 support that too.
 
+For the export process and the contents of each file, see [Stage ⑤ — CSV Exports](notebook/stage_05_csv_exports.md).
+
 ### Two implementation details that shape every file
 
 **Excel-safe encoding.** Every file is written with `df.to_csv(out_path, index=False,
@@ -1075,6 +996,8 @@ the standard reporting tool in NHS finance departments.
 
 `dim_trust[sector]`, `dim_trust[region]`, and `dim_financial_year[financial_year]` are placed as slicers
 on every page, filtering all of that page's visuals simultaneously.
+
+For the dashboard setup, model, and page-by-page walkthrough, see [Stage ⑥ — Power BI Dashboard](notebook/stage_06_powerbi_dashboard.md).
 
 ### Report pages
 

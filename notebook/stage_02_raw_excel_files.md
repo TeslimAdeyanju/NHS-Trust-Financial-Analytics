@@ -63,26 +63,41 @@ df = df[df["org_code"].str.len() == 3]   # drops blank rows, header artefacts
 ### Sheet 2 — "All data"
 
 The main data sheet: ~481,000 rows (NHS Trusts file) or ~1.1M rows (Foundation Trusts file), long/narrow,
-exactly 7 columns.
+exactly 7 columns. Each row is one reported amount: the trust and TAC schedule identify the context,
+`TableID` and `MainCode` locate the source table and column, and `RowNumber` and `SubCode` identify the
+line item.
 
 | Column           | Type    | Description                          | Example                  |
 |-------------------|---------|----------------------------------------|----------------------------|
 | OrganisationName  | string  | Full legal name of the trust           | `Barts Health NHS Trust`  |
 | WorkSheetName     | string  | TAC schedule name                      | `TAC02 SoCI`               |
 | TableID           | integer | Table number within the sheet          | `1`                         |
-| MainCode          | string  | Sheet + CY/PY + table identifier       | `A02CY01`                   |
+| MainCode          | string  | Schedule + CY/PY + column identifier   | `A02CY01`                   |
 | RowNumber         | integer | Row position in original form          | `12`                         |
 | SubCode           | string  | Unique line item identifier            | `SCI0100A`                   |
 | Total             | integer | Value in £000s                         | `2047312`                     |
 
 ```text
-OrganisationName          WorkSheetName   MainCode   SubCode    Total
-────────────────────────  ──────────────  ─────────  ─────────  ──────────
-Barts Health NHS Trust    TAC02 SoCI      A02CY01    SCI0100A   2047312   ← patient care income CY
-Barts Health NHS Trust    TAC02 SoCI      A02CY01    SCI0140A     82379   ← operating surplus CY
-Barts Health NHS Trust    TAC08 Op Exp    A08CY01    EXP0130    1187432   ← staff costs CY
-Barts Health NHS Trust    TAC02 SoCI      A02PY01    SCI0100A   1901877   ← patient care income PY ← DROP
+OrganisationName          WorkSheetName  TableID  MainCode  RowNumber  SubCode    Total
+Barts Health NHS Trust    TAC02 SoCI     1        A02CY01   12         SCI0100A   2047312  patient care income CY
+Barts Health NHS Trust    TAC02 SoCI     1        A02CY01   18         SCI0140A     82379  operating surplus CY
+Barts Health NHS Trust    TAC08 Op Exp   1        A08CY01   10         EXP0130    1187432  staff costs CY
+Barts Health NHS Trust    TAC02 SoCI     1        A02PY01   12         SCI0100A   1901877  patient care income PY - drop
 ```
+
+Read one row from left to right: `OrganisationName` says whose figure it is; `WorkSheetName` and
+`TableID` identify the schedule and table; `MainCode` identifies the source column; `RowNumber` and
+`SubCode` identify the line; `Total` is the amount in £000s. For example, the first row is Barts Health
+NHS Trust's current-year patient care income in TAC02.
+
+`MainCode` follows the pattern `A{schedule_number}{CY|PY}{column_number}[optional suffix]`. In
+`A02CY01`, `A02` means schedule TAC02, `CY` means Current Year, and `01` means column 1. The trailing
+number is a **column number**, not a table number; `TableID` stores the table separately. Some schedules
+add a category suffix, such as `P` for permanent staff in `A09CY01P`.
+
+In the original TAC table, `SubCode` labels a row and `MainCode` labels a value column. "All data" flattens
+the intersection of that row and column into one record. This is why both codes are needed to interpret a
+reported amount.
 
 The last row is 2022/23 data embedded inside the 2023/24 file — every annual file carries both years side
 by side for comparison, and the PY row must be dropped to avoid double-counting once all six files are
