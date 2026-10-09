@@ -274,13 +274,49 @@ belongs in version control (exact filenames listed again in
 
 ### What's inside each file
 
-Each workbook has two sheets used by the pipeline: **"List of Providers"** maps trust names to ODS codes,
-region, and sector; **"All Data"** contains the reported financial figures in long format, one row per
-reported line. The pipeline uses the provider list to add trust identifiers and keeps Current Year (CY)
-figures from "All Data" to avoid repeating prior-year comparisons.
+Each workbook contains multiple sheets. Two are central to this project:
 
-For the field definitions, a worked example that includes `OrganisationName`, and details of how `MainCode`
-and CY/PY are interpreted, see [Stage ② — Raw Excel Files](notebook/stage_02_raw_excel_files.md).
+**Sheet 1 — "List of Providers"** is a lookup table connecting each trust's name to its ODS code, region,
+and sector.
+
+| Column | Example | Purpose |
+| ------ | ------- | ------- |
+| Full name of Provider | Airedale NHS Foundation Trust | Joins to the trust name in "All Data" |
+| NHS code | RCF | Stable ODS identifier for the trust |
+| Region | North East and Yorkshire | Regional comparison |
+| Sector | Acute | Like-for-like comparison |
+| Authorisation date | 6/1/10 | Present in the source; not used by the current pipeline |
+
+![List of Providers sheet showing trust names, NHS codes, authorisation dates, regions, and sectors.](docs/images/List%20of%20Providers.png)
+
+**Sheet 2 — "All Data"** contains the reported financial figures in **long/narrow format**. Each row is
+one reported amount from the original TAC tables, identified by trust, schedule, table, reporting column,
+and line item. It is not one row per trust or one row containing a whole statement: a trust appears in many
+rows because its accounts contain many financial lines across multiple schedules and columns.
+
+| Column | Type | Description | Example |
+| ------ | ---- | ----------- | ------- |
+| OrganisationName | Text | Full trust name | Airedale NHS Foundation Trust |
+| WorkSheetName | Text | TAC schedule | TAC02 SoCI |
+| TableID | Integer | Table number within the schedule | 1 |
+| MainCode | Text | Schedule, year type, and source column; the table is identified separately by `TableID` | A02CY01 |
+| RowNumber | Integer | Position of the line on the original form | 12 |
+| SubCode | Text | Financial line item | SCI0100A |
+| Total | Number | Amount in **£000s** | 218758.00 |
+
+![2021/22 All Data rows for Airedale NHS Foundation Trust, including the original Organisation Name and Value number column headers.](docs/images/data_sample.png)
+
+The first row shown is patient care income: `Airedale NHS Foundation Trust`, TAC02 table 1, current-year
+column `A02CY01`, row 12, SubCode `SCI0100A`, and amount £218,758.00 thousand. The screenshot is from the
+2021/22 workbook, which labels the first and last fields `Organisation Name` and `Value number`; the
+pipeline normalizes these to `OrganisationName` and `Total`.
+
+This row-level structure is why the source files are large: one NHS Trust workbook has roughly 481,000 rows
+and one Foundation Trust workbook roughly 1.1 million. After the pipeline filters comparison-year rows and
+loads the three financial years, the fact table contains about **2.18 million rows**.
+
+For the detailed field walkthrough and how `MainCode` and CY/PY values work across annual files, see
+[Stage ② — Raw Excel Files](notebook/stage_02_raw_excel_files.md).
 
 ---
 

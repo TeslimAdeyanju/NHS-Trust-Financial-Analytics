@@ -44,15 +44,19 @@ files = sorted(
 
 Small lookup table, one row per trust (66 or 140 rows).
 
-| Column                | Example                                  |
-|------------------------|-------------------------------------------|
-| Full name of Provider  | `Barnsley Hospital NHS Foundation Trust`  |
-| NHS code               | `RFF`                                     |
-| Region                 | `Yorkshire and Humber`                    |
-| Sector                 | `Acute`                                   |
+| Column | Example |
+| ------ | ------- |
+| Full name of Provider | `Airedale NHS Foundation Trust` |
+| NHS code | `RCF` |
+| Authorisation date | `6/1/10` |
+| Region | `North East and Yorkshire` |
+| Sector | `Acute` |
+
+![Screenshot of the List of Providers sheet, showing each provider's full name, NHS code, authorisation date, region, and sector.](../docs/images/List%20of%20Providers.png)
 
 **Purpose:** provides the ODS code for each trust by name. The "All data" sheet has names, not codes —
-this sheet resolves that gap.
+this sheet resolves that gap. The source also includes authorisation dates, but the current pipeline does
+not load that field; it carries the provider name, ODS code, region, and sector into staging.
 
 The pipeline keeps only rows where `org_code` is exactly 3 characters:
 
@@ -67,41 +71,37 @@ exactly 7 columns. Each row is one reported amount: the trust and TAC schedule i
 `TableID` and `MainCode` locate the source table and column, and `RowNumber` and `SubCode` identify the
 line item.
 
-| Column           | Type    | Description                          | Example                  |
-|-------------------|---------|----------------------------------------|----------------------------|
-| OrganisationName  | string  | Full legal name of the trust           | `Barts Health NHS Trust`  |
-| WorkSheetName     | string  | TAC schedule name                      | `TAC02 SoCI`               |
-| TableID           | integer | Table number within the sheet          | `1`                         |
-| MainCode          | string  | Schedule + CY/PY + column identifier   | `A02CY01`                   |
-| RowNumber         | integer | Row position in original form          | `12`                         |
-| SubCode           | string  | Unique line item identifier            | `SCI0100A`                   |
-| Total             | integer | Value in £000s                         | `2047312`                     |
+| Source column | What it identifies | Example from the screenshot |
+| ------------- | ------------------ | --------------------------- |
+| `Organisation Name` | Trust reporting the figure | `Airedale NHS Foundation Trust` |
+| `WorkSheetName` | TAC schedule | `TAC02 SoCI` |
+| `TableID` | Table within that schedule | `1` |
+| `MainCode` | Source column, including year type | `A02CY01` |
+| `RowNumber` | Line position on the original form | `12` |
+| `SubCode` | Financial line item | `SCI0100A` |
+| `Value number` | Amount, in £000s | `218,758.00` |
 
-```text
-OrganisationName          WorkSheetName  TableID  MainCode  RowNumber  SubCode    Total
-Barts Health NHS Trust    TAC02 SoCI     1        A02CY01   12         SCI0100A   2047312  patient care income CY
-Barts Health NHS Trust    TAC02 SoCI     1        A02CY01   18         SCI0140A     82379  operating surplus CY
-Barts Health NHS Trust    TAC08 Op Exp   1        A08CY01   10         EXP0130    1187432  staff costs CY
-Barts Health NHS Trust    TAC02 SoCI     1        A02PY01   12         SCI0100A   1901877  patient care income PY - drop
-```
+Each row is one reported amount. The schedule and table show where it came from; `MainCode` identifies its
+column; `RowNumber` and `SubCode` identify the line item. The value is in £000s.
 
-Read one row from left to right: `OrganisationName` says whose figure it is; `WorkSheetName` and
-`TableID` identify the schedule and table; `MainCode` identifies the source column; `RowNumber` and
-`SubCode` identify the line; `Total` is the amount in £000s. For example, the first row is Barts Health
-NHS Trust's current-year patient care income in TAC02.
+![2021/22 All data rows for Airedale NHS Foundation Trust. The visible fields are Organisation Name, WorkSheetName, TableID, MainCode, RowNumber, SubCode, and Value number.](../docs/images/data_sample.png)
+
+In the first row, `Airedale NHS Foundation Trust` is the organisation, `TAC02 SoCI` is the schedule,
+`TableID` is 1, and `A02CY01` identifies the current-year column. `RowNumber` 12 and `SubCode` `SCI0100A`
+locate the patient-care-income line; `218,758.00` is its amount in £000s. The repeated `A02CY01` values
+show that these rows belong to the same column, while their row numbers and SubCodes identify different
+lines.
 
 `MainCode` follows the pattern `A{schedule_number}{CY|PY}{column_number}[optional suffix]`. In
 `A02CY01`, `A02` means schedule TAC02, `CY` means Current Year, and `01` means column 1. The trailing
 number is a **column number**, not a table number; `TableID` stores the table separately. Some schedules
 add a category suffix, such as `P` for permanent staff in `A09CY01P`.
 
-In the original TAC table, `SubCode` labels a row and `MainCode` labels a value column. "All data" flattens
-the intersection of that row and column into one record. This is why both codes are needed to interpret a
-reported amount.
-
-The last row is 2022/23 data embedded inside the 2023/24 file — every annual file carries both years side
-by side for comparison, and the PY row must be dropped to avoid double-counting once all six files are
-combined (see [stage ③](stage_03_mysql_staging.md) for where that filter actually runs).
+In the original TAC table, `SubCode` labels the line and `MainCode` labels the value column; "All data"
+flattens their intersection into one record. In the screenshot, `A02PY01` marks the prior-year comparison
+column alongside `A02CY01`. Because this is the 2021/22 workbook, its PY values are for 2020/21. The
+pipeline drops PY rows and keeps CY rows to avoid counting comparison years again when workbooks are
+combined. The filter runs during [stage ③](stage_03_mysql_staging.md).
 
 ---
 
