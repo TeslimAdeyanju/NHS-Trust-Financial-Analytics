@@ -69,11 +69,37 @@ The project uses Python to ingest and process NHS England TAC workbooks, MySQL t
 
 ## NHS Financial Reporting and Sustainability
 
-### NHS providers and their financial context
+### NHS Providers and Their Financial Context
 
-NHS trusts and NHS foundation trusts deliver healthcare services within England's publicly funded health system. Provider activity includes acute, specialist, mental health, community and ambulance services; sector labels in source workbooks must be respected rather than inferred from a provider's name. Provider income, funding arrangements, patient-care costs and accounting treatment can vary, so benchmarking needs appropriate context.
+The **National Health Service (NHS) in England** delivers publicly funded healthcare through organisations responsible for commissioning, overseeing and providing services. **NHS Trusts and NHS Foundation Trusts** are provider organisations that deliver care to patients and communities. Their services, patient populations and operational responsibilities differ.
 
-NHS Trust Accounts Consolidation records include the **Statement of Comprehensive Income (SoCI)**, balance-sheet information and schedules for patient-care income, expenses and workforce. TAC is useful for consistent accounting analysis; it is not a substitute for operational, workforce-quality or clinical outcomes data.
+For this project, the main healthcare service categories are:
+
+- **Acute Services:** Hospital-based care, including emergency treatment, inpatient admissions, surgery and outpatient consultations.
+- **Specialist Services:** Highly specialised treatment for complex or less common conditions, including specialist cancer, cardiac and neurological services.
+- **Mental Health Services:** Assessment, treatment and ongoing support for mental health conditions in community and inpatient settings.
+- **Community Health Services:** Care delivered outside traditional hospital settings, including community nursing, rehabilitation and health visiting.
+- **Ambulance Services:** Emergency medical response, urgent assessment and patient transport services.
+
+**These service categories matter for financial analysis because NHS providers have different cost structures, workforce requirements and care delivery models.** Acute hospitals, for example, can have substantial costs for clinical staff, medicines and equipment, whereas mental health and community providers may have different staffing and operating cost profiles.
+
+Accordingly, **financial comparisons must consider the provider's service category, organisational responsibilities and reporting period.** This project uses the sector classifications reported in the TAC source data rather than assigning categories from provider names.
+
+#### NHS Trust Accounts Consolidation (TAC)
+
+The **Trust Accounts Consolidation (TAC)** data published by NHS England provides financial information for NHS Trusts and NHS Foundation Trusts. Relevant financial statements and supporting schedules include:
+
+- **Statement of Comprehensive Income (SoCI):** Income, expenditure and the financial result for the reporting period.
+- **Statement of Financial Position (Balance Sheet):** Assets, liabilities and taxpayers' equity at the reporting date.
+- **Patient Care Income:** Income associated with healthcare services and related funding arrangements.
+- **Operating Expenditure:** Staffing costs, supplies, services and other operating expenses.
+- **Workforce Information:** Staff costs and whole-time equivalent (WTE) workforce measures.
+
+**These financial records are the primary data inputs for this project**, enabling analysis of provider financial performance across **2021/22, 2022/23 and 2023/24**.
+
+However, **financial accounts alone cannot establish the overall quality or effectiveness of healthcare delivery.** Patient outcomes, waiting times, service demand and clinical effectiveness require additional operational or clinical data. This project therefore focuses on **financial sustainability, expenditure patterns, workforce costs and financial performance**, rather than assessing the overall quality of care provided by individual NHS organisations.
+
+**Primary data source:** [NHS England — NHS Providers TAC Data Publications](https://www.england.nhs.uk/financial-accounting-and-reporting/nhs-providers-tac-data-publications/).
 
 ### What financial sustainability means
 
