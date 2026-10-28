@@ -8,25 +8,31 @@ This document explains the business question, NHS accounting context, implemente
 
 ## Contents
 
-1. [Research question and executive summary](#1-research-question-and-executive-summary)
-2. [NHS financial reporting and sustainability](#2-nhs-financial-reporting-and-sustainability)
-3. [Objectives, scope and definitions](#3-objectives-scope-and-definitions)
-4. [Six-stage data analytics lifecycle](#4-six-stage-data-analytics-lifecycle)
-5. [Stage 1 — Data Sourcing](#5-stage-1--data-sourcing)
-6. [Stage 2 — Data Ingestion](#6-stage-2--data-ingestion)
-7. [Stage 3 — Data Cleaning & Transformation](#7-stage-3--data-cleaning--transformation)
-8. [Stage 4 — Data Modelling & Analytics](#8-stage-4--data-modelling--analytics)
-9. [Stage 5 — Data Preparation for Reporting](#9-stage-5--data-preparation-for-reporting)
-10. [Stage 6 — Data Visualisation & Insights](#10-stage-6--data-visualisation--insights)
-11. [Financial findings and reconciliation](#11-financial-findings-and-reconciliation)
-12. [Data quality, auditability and limitations](#12-data-quality-auditability-and-limitations)
-13. [Reproducibility and operational workflow](#13-reproducibility-and-operational-workflow)
-14. [Project deliverables and next steps](#14-project-deliverables-and-next-steps)
-15. [Glossary and reference material](#15-glossary-and-reference-material)
+### Part I — Background and Research Context
+
+- [Research Question and Executive Summary](#research-question-and-executive-summary)
+- [NHS Financial Reporting and Sustainability](#nhs-financial-reporting-and-sustainability)
+- [Objectives, Scope and Definitions](#objectives-scope-and-definitions)
+
+### Part II — Research Methodology
+
+- [Methodology: Six-Stage Data Analytics Lifecycle](#methodology-six-stage-data-analytics-lifecycle)
+
+The six technical stages are grouped under Methodology, with their own navigation list.
+
+### Part III — Findings, Validation and Project Outcomes
+
+- [Financial Findings and Reconciliation](#financial-findings-and-reconciliation)
+- [Data Quality, Auditability and Limitations](#data-quality-auditability-and-limitations)
+- [Reproducibility and Operational Workflow](#reproducibility-and-operational-workflow)
+- [Project Deliverables and Next Steps](#project-deliverables-and-next-steps)
+- [Glossary and Reference Material](#glossary-and-reference-material)
 
 ---
 
-## 1. Research question and executive summary
+**PART I — BACKGROUND AND RESEARCH CONTEXT**
+
+## Research Question and Executive Summary
 
 ### Why I undertook this project
 
@@ -54,7 +60,7 @@ The project uses Python to ingest and process NHS England TAC workbooks, MySQL t
 
 ---
 
-## 2. NHS financial reporting and sustainability
+## NHS Financial Reporting and Sustainability
 
 ### NHS providers and their financial context
 
@@ -85,7 +91,7 @@ Account balances can change because of service pressures **and** accounting poli
 
 ---
 
-## 3. Objectives, scope and definitions
+## Objectives, Scope and Definitions
 
 The objectives are to:
 
@@ -112,7 +118,20 @@ The warehouse may contain more organisational identifiers than a year-specific a
 
 ---
 
-## 4. Six-stage data analytics lifecycle
+**PART II — RESEARCH METHODOLOGY**
+
+## Methodology: Six-Stage Data Analytics Lifecycle
+
+### Methodology roadmap
+
+The methodology is organised as six consecutive stages. Select a stage to go directly to its technical explanation:
+
+1. [Data Sourcing](#stage-1--data-sourcing) — obtain authoritative NHS England TAC data and define source controls.
+2. [Data Ingestion](#stage-2--data-ingestion) — capture source workbooks and load raw records to Bronze.
+3. [Data Cleaning & Transformation](#stage-3--data-cleaning--transformation) — standardise, validate and conform records in Silver.
+4. [Data Modelling & Analytics](#stage-4--data-modelling--analytics) — organise dimensions, facts and financial KPIs in Silver and Gold.
+5. [Data Preparation for Reporting](#stage-5--data-preparation-for-reporting) — prepare curated datasets and exports.
+6. [Data Visualisation & Insights](#stage-6--data-visualisation--insights) — design and communicate Power BI financial analysis.
 
 The project is explained using stages named for **the work performed**, not merely the software or storage location.
 
@@ -133,7 +152,7 @@ The [original detailed technical architecture diagram](docs/images/pipeline_arch
 
 ---
 
-## 5. Stage 1 — Data Sourcing
+## Stage 1 — Data Sourcing
 
 **Purpose:** Establish the provenance, reporting scope and accounting context of every input.
 
@@ -162,7 +181,7 @@ The provider roster supplies organisation identifiers and descriptive metadata s
 
 ---
 
-## 6. Stage 2 — Data Ingestion
+## Stage 2 — Data Ingestion
 
 **Purpose:** Load identifiable source records without losing their origin.
 
@@ -198,7 +217,7 @@ The current ingestion script has been changed to read a MySQL password from the 
 
 ---
 
-## 7. Stage 3 — Data Cleaning & Transformation
+## Stage 3 — Data Cleaning & Transformation
 
 **Purpose:** Convert raw financial records into consistent, analysable data while preserving an audit path.
 
@@ -234,7 +253,7 @@ For national-level reconciliation, validation must be stronger than checking whe
 
 ---
 
-## 8. Stage 4 — Data Modelling & Analytics
+## Stage 4 — Data Modelling & Analytics
 
 **Purpose:** Turn verified accounting records into consistent analysis-ready measures and comparisons.
 
@@ -302,7 +321,7 @@ Investigate population changes and accounting adjustments before interpreting tr
 
 ---
 
-## 9. Stage 5 — Data Preparation for Reporting
+## Stage 5 — Data Preparation for Reporting
 
 **Purpose:** Shape curated, analysable database outputs for a reporting tool without redefining the underlying accounting logic.
 
@@ -345,7 +364,7 @@ A row-per-trust/year table should not be joined directly to another fact table a
 
 ---
 
-## 10. Stage 6 — Data Visualisation & Insights
+## Stage 6 — Data Visualisation & Insights
 
 **Purpose:** Make reconciled financial information interpretable by a finance director, board member or analyst.
 
@@ -371,7 +390,9 @@ The primary executive page should provide a clear summary but avoid making unsup
 
 ---
 
-## 11. Financial findings and reconciliation
+**PART III — FINDINGS, VALIDATION AND PROJECT OUTCOMES**
+
+## Financial Findings and Reconciliation
 
 ### Published national benchmarks
 
@@ -406,7 +427,7 @@ No number should be changed solely to match an external benchmark. Unresolved di
 
 ---
 
-## 12. Data quality, auditability and limitations
+## Data Quality, Auditability and Limitations
 
 ### Controls that make the project credible
 
@@ -440,7 +461,7 @@ A *passed automated check* means its specified rule passed during that run. It d
 
 ---
 
-## 13. Reproducibility and operational workflow
+## Reproducibility and Operational Workflow
 
 ### Prerequisites
 
@@ -482,7 +503,7 @@ A reproducible run should archive checksums of six TAC inputs, schema/script rev
 
 ---
 
-## 14. Project deliverables and next steps
+## Project Deliverables and Next Steps
 
 | Deliverable | Repository evidence | Status |
 | --- | --- | --- |
@@ -510,7 +531,7 @@ Even in its current state, the repository demonstrates a coherent approach to ha
 
 ---
 
-## 15. Glossary and reference material
+## Glossary and Reference Material
 
 | Term | Meaning |
 | --- | --- |
