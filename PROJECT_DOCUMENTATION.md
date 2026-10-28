@@ -16,9 +16,16 @@ This document explains the business question, NHS accounting context, implemente
 
 ### Part II — Research Methodology
 
-- [Methodology: Six-Stage Data Analytics Lifecycle](#methodology-six-stage-data-analytics-lifecycle)
+**Methodology: Six-Stage Data Analytics Lifecycle**
 
-The six stages are summarised as a coherent research process. Detailed implementation, source structures, SQL and Power BI notes are maintained in stage-specific notebooks.
+1. [Data Sourcing](#stage-1--data-sourcing) — obtain authoritative NHS England TAC data and define source controls.
+2. [Data Ingestion](#stage-2--data-ingestion) — capture source workbooks and load raw records to Bronze.
+3. [Data Cleaning & Transformation](#stage-3--data-cleaning--transformation) — standardise, validate and conform records in Silver.
+4. [Data Modelling & Analytics](#stage-4--data-modelling--analytics) — organise dimensions, facts and financial KPIs in Silver and Gold.
+5. [Data Preparation for Reporting](#stage-5--data-preparation-for-reporting) — prepare curated datasets and exports.
+6. [Data Visualisation & Insights](#stage-6--data-visualisation--insights) — design and communicate Power BI financial analysis.
+
+Detailed implementations remain in the stage-specific technical notebooks linked from each section.
 
 ### Part III — Findings, Validation and Project Outcomes
 
