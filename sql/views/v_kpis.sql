@@ -15,7 +15,7 @@
 --   7. Capital Spend as % of Plan — needs ERIC estates data
 --
 -- RAG flags:
---   ebitda_rag  — Green ≥5% | Amber 2–5% | Red <2%  (NHS England standard)
+--   ebitda_rag  — Green ≥5% | Amber ≥2% to <5% | Red <2% (illustrative project bands)
 --   surplus_rag — Green ≥0% | Amber -2–0% | Red <-2%
 
 USE nhs_gold;
@@ -81,10 +81,13 @@ SELECT
     CASE WHEN ie.operating_surplus_000s < 0 THEN 1 ELSE 0 END AS is_deficit,
 
     CASE
-        WHEN ie.operating_surplus_000s + COALESCE(ex.depreciation_amort_000s, 0)
-             / NULLIF(ie.total_income_000s, 0) * 100 >= 5  THEN 'Green'
-        WHEN ie.operating_surplus_000s + COALESCE(ex.depreciation_amort_000s, 0)
-             / NULLIF(ie.total_income_000s, 0) * 100 >= 2  THEN 'Amber'
+        WHEN ie.total_income_000s IS NULL OR ie.total_income_000s <= 0
+             OR ie.operating_surplus_000s IS NULL OR ex.depreciation_amort_000s IS NULL
+            THEN 'Not assessed'
+        WHEN (ie.operating_surplus_000s + ex.depreciation_amort_000s)
+             / NULLIF(ie.total_income_000s, 0) * 100 >= 5 THEN 'Green'
+        WHEN (ie.operating_surplus_000s + ex.depreciation_amort_000s)
+             / NULLIF(ie.total_income_000s, 0) * 100 >= 2 THEN 'Amber'
         ELSE 'Red'
     END AS ebitda_rag,
 

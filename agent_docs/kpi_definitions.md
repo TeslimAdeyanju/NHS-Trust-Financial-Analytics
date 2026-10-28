@@ -1,36 +1,30 @@
 # KPI Definitions and Business Rules
 
-All monetary values are in £000s unless stated. All KPIs use `data_type = 'ACTUAL'` unless noted.
+All monetary values are in £000s unless stated. Confirm the accounting basis and reporting period before comparison. RAG bands in this document are project-defined unless a specific NHS England published standard is cited; some measures describe intended future integrations rather than implemented TAC outputs.
 
 ---
 
 ## 1. EBITDA Margin %
 
-**Definition:** Earnings Before Interest, Tax, Depreciation and Amortisation as a percentage of Total Income.
-Measures underlying operational financial sustainability.
+**Definition:** A supplementary operating performance ratio calculated from the TAC operating result. This is not NHS England's statutory or adjusted provider deficit measure.
 
-**Formula:**
-```
-EBITDA £000s = Total Income £000s - Total Pay £000s - Total Non-Pay £000s
-               (excludes depreciation, interest, and impairment from non-pay)
-
-EBITDA Margin % = EBITDA £000s / Total Income £000s × 100
+```text
+EBITDA (£000s) = operating_surplus_000s + depreciation_amort_000s
+EBITDA margin (%) = EBITDA / total_income_000s × 100
 ```
 
-**Filters:**
-- Include: all income lines where `account_type = 'INCOME'`
-- Include: all pay lines where `account_type = 'PAY'`
-- Include: non-pay lines where `account_type = 'NON_PAY'` AND `subjective_code NOT IN ('DEPR', 'INT', 'IMP')`
+Validate the signs and sources of depreciation and amortisation before reporting the figure. EBITDA should not be described as cash flow.
 
-**NHS benchmark:** A financially sustainable Trust targets ≥ 1% EBITDA Margin.
-Trusts below 0% are in deficit and are subject to regulatory intervention.
+**Illustrative project RAG bands (NOT NHS England regulatory thresholds):**
 
-**RAG thresholds:**
-| Status | Range           |
-|--------|-----------------|
-| GREEN  | ≥ 2%            |
-| AMBER  | 0% to < 2%      |
-| RED    | < 0%            |
+| Band | EBITDA margin |
+| --- | --- |
+| Green | >= 5% |
+| Amber | >= 2% and < 5% |
+| Red | < 2% |
+| Not assessed | Missing inputs or non-positive total income |
+
+A negative EBITDA margin is not identical to the official NHS financial deficit measure and does not by itself establish regulatory intervention. See the [NHS Oversight Framework](https://www.england.nhs.uk/nhs-oversight-framework/).
 
 ---
 
