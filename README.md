@@ -6,7 +6,7 @@ This project was motivated by a need to understand the growing financial pressur
 
 > **How is the financial health of NHS Trusts in England changing over time, and which parts of the health system are under the most pressure?**
 
-**What the analysis found:** Between 2021/22 and 2023/24, the sector's reported operating position deteriorated from a £1.6bn surplus to a £1.6bn deficit. Provider expenditure rose faster than income, while the number of trusts reporting deficits increased from 37 of 211 to 124 of 206. These findings point to growing financial pressure across NHS providers, although the headline figures alone do not establish which individual trusts or cost categories experienced the greatest pressure.
+**What the published accounts show:** NHS England reported a £562 million surplus in 2021/22, a £457 million deficit in 2022/23 and a £2.312 billion deficit in 2023/24, measured before impairments and transfers. The proportion of providers reporting a deficit increased from about 34% to 64%. These figures show a worsening financial position but do not, on their own, identify the cause.
 
 **How I investigated it:** I used NHS England's published Trust Accounts Consolidation data for three financial years, processed and standardised the source records with Python, and developed MySQL analytical views and financial measures for cross-year and trust-level comparison. The project also includes a Power BI reporting model; the dashboard itself is pending publication.
 
@@ -15,25 +15,23 @@ This project was motivated by a need to understand the growing financial pressur
 ## Key findings
 
 <table width="100%">
-  <thead>
-    <tr>
-      <th align="left" width="49%">Indicator</th>
-      <th align="right" width="17%">2021/22</th>
-      <th align="right" width="17%">2022/23</th>
-      <th align="right" width="17%">2023/24</th>
-    </tr>
-  </thead>
+  <thead><tr><th align="left" width="49%">Official NHS provider measure</th><th align="right" width="17%">2021/22</th><th align="right" width="17%">2022/23</th><th align="right" width="17%">2023/24</th></tr></thead>
   <tbody>
-    <tr><td>Total provider income</td><td align="right">£110.3bn</td><td align="right">£118.4bn</td><td align="right">£129.2bn</td></tr>
-    <tr><td>Total provider expenditure</td><td align="right">£108.7bn</td><td align="right">£118.2bn</td><td align="right">£130.8bn</td></tr>
-    <tr><td>Reported operating surplus / (deficit)</td><td align="right">+£1.6bn</td><td align="right">+£148m</td><td align="right"><strong>−£1.6bn</strong></td></tr>
-    <tr><td>Trusts reporting a deficit</td><td align="right">37 of 211</td><td align="right">85 of 207</td><td align="right"><strong>124 of 206</strong></td></tr>
+    <tr><td>Surplus / (deficit) before impairments and transfers</td><td align="right">+£562m</td><td align="right">−£457m</td><td align="right"><strong>−£2,312m</strong></td></tr>
+    <tr><td>Providers reporting a deficit</td><td align="right">74 of 215</td><td align="right">105 of 212</td><td align="right"><strong>136 of 211</strong></td></tr>
+    <tr><td>Share of providers in deficit</td><td align="right">34.4%</td><td align="right">49.5%</td><td align="right"><strong>64.5%</strong></td></tr>
   </tbody>
 </table>
 
 **Why it matters:** The figures reveal a widening financial sustainability challenge and make it important to investigate which providers and spending categories face the greatest pressure. They do not, by themselves, establish a single cause of the deterioration.
 
-Figures are taken from the project's existing analysis, not newly audited in this README revision. For calculations, assumptions, financial conventions and interpretation, read the [2023/24 Financial Review](reports/nhs_sector_financial_review_2324.md).
+**Basis and limitations:** The figures above come from NHS England's official consolidated provider accounts, not a fresh execution of this project's SQL. The project's existing TAC-derived operating measure (subcode `SCI0140A`) is different and still needs reconciliation against source data before being reported as validated. The supporting project documentation and financial review have not yet been reconciled.
+
+The 2023/24 deficit includes a £1.094 billion impact from changes in the accounting treatment of PFI liabilities under IFRS 16, affecting comparability.
+
+**Official accounts:** [2021/22](https://www.gov.uk/government/publications/consolidated-nhs-provider-accounts-2021-to-2022) | [2022/23](https://www.gov.uk/government/publications/consolidated-nhs-provider-accounts-2022-to-2023) | [2023/24](https://www.gov.uk/government/publications/consolidated-nhs-provider-accounts-2023-to-2024).
+
+See [Project Documentation](PROJECT_DOCUMENTATION.md) and the [2023/24 Financial Review](reports/nhs_sector_financial_review_2324.md) for the existing project calculations, which require review.
 
 ## Power BI dashboard
 
