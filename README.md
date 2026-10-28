@@ -40,6 +40,8 @@ The 2023/24 deficit includes a £1.094 billion impact from changes in the accoun
 
 See [Project Documentation](PROJECT_DOCUMENTATION.md) and the [2023/24 Financial Review](reports/nhs_sector_financial_review_2324.md) for the existing project calculations, which require review.
 
+[Financial reconciliation workpaper](reports/nhs_financial_reconciliation.md) documents the official accounting bridge, differences in existing SQL metrics and outstanding validation steps.
+
 ## Power BI dashboard
 
 **Dashboard publication pending.** The repository includes the Power BI model reference, report page specifications and DAX measure definitions, but no published report or report-page screenshot is available to link here yet.
