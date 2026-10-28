@@ -59,7 +59,7 @@ NHS England's published consolidated provider accounts report a surplus of **£5
 
 These are **official published benchmarks, not independently reproduced outputs from the project's SQL pipeline**. The project also calculates an **operating** surplus/(deficit), which is a different measure; the earlier figures in project narratives must not be substituted for the official series or used to claim reconciliation. See [Financial reconciliation workpaper](reports/nhs_financial_reconciliation.md).
 
-**Primary sources:** [2021/22 NHS provider accounts](https://www.gov.uk/government/publications/consolidated-nhs-provider-accounts-2021-to-2022), [2022/23 accounts](https://www.gov.uk/government/publications/consolidated-nhs-provider-accounts-2022-to-2023), [2023/24 accounts](https://www.gov.uk/government/publications/consolidated-nhs-provider-accounts-2023-to-2024).
+**Primary source:** [NHS England — NHS providers TAC data publications](https://www.england.nhs.uk/financial-accounting-and-reporting/nhs-providers-tac-data-publications/).
 
 ### Analytical approach
 
