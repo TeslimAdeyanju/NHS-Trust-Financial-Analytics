@@ -14,6 +14,11 @@ This project was motivated by a need to understand the growing financial pressur
 
 ## Key findings
 
+<img src="docs/images/nhs-official-findings-table.svg" alt="Official NHS provider measures across 2021/22, 2022/23 and 2023/24: surplus or deficit, number of deficit providers and share in deficit." width="100%" />
+
+<details>
+<summary>View the findings as a text table</summary>
+
 <table width="100%">
   <thead><tr><th align="left" width="49%">Official NHS provider measure</th><th align="right" width="17%">2021/22</th><th align="right" width="17%">2022/23</th><th align="right" width="17%">2023/24</th></tr></thead>
   <tbody>
@@ -22,6 +27,8 @@ This project was motivated by a need to understand the growing financial pressur
     <tr><td>Share of providers in deficit</td><td align="right">34.4%</td><td align="right">49.5%</td><td align="right"><strong>64.5%</strong></td></tr>
   </tbody>
 </table>
+
+</details>
 
 **Why it matters:** The figures reveal a widening financial sustainability challenge and make it important to investigate which providers and spending categories face the greatest pressure. They do not, by themselves, establish a single cause of the deterioration.
 

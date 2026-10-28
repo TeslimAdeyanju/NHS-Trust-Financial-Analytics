@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="390" viewBox="0 0 1600 390" role="img" aria-labelledby="title desc">
+<title id="title">Official NHS provider financial measures, 2021/22 to 2023/24</title>
+<desc id="desc">Surplus or deficit before impairments and transfers: plus £562m, minus £457m, minus £2312m. Providers reporting deficit: 74 of 215, 105 of 212, 136 of 211. Percentages: 34.4%, 49.5%, 64.5%.</desc>
+<rect width="1600" height="390" fill="#ffffff"/>
+<path d="M0 0H1600V390H0Z" fill="none" stroke="#cbd5df" stroke-width="2"/>
+<rect x="0" y="100" width="1600" height="120" fill="#f3f6f8"/><rect x="0" y="220" width="1600" height="85" fill="#ffffff"/><rect x="0" y="305" width="1600" height="85" fill="#f3f6f8"/>
+<g stroke="#cbd5df" stroke-width="2"><path d="M745 0V390M1030 0V390M1315 0V390M0 100H1600M0 220H1600M0 305H1600"/></g>
+<g font-family="Arial,Helvetica,sans-serif" font-size="32" fill="#20252b">
+<text x="35" y="64" font-weight="700">Official NHS provider measure</text>
+<text x="887" y="64" font-weight="700" text-anchor="middle">2021/22</text>
+<text x="1172" y="64" font-weight="700" text-anchor="middle">2022/23</text>
+<text x="1457" y="64" font-weight="700" text-anchor="middle">2023/24</text>
+<text x="35" y="148">Surplus / (deficit) before impairments</text><text x="35" y="193">and transfers</text>
+<text x="995" y="170" text-anchor="end">+£562m</text><text x="1280" y="170" text-anchor="end">−£457m</text><text x="1565" y="170" text-anchor="end" font-weight="700">−£2,312m</text>
+<text x="35" y="271">Providers reporting a deficit</text>
+<text x="995" y="271" text-anchor="end">74 of 215</text><text x="1280" y="271" text-anchor="end">105 of 212</text><text x="1565" y="271" text-anchor="end" font-weight="700">136 of 211</text>
+<text x="35" y="355">Share of providers in deficit</text><text x="995" y="355" text-anchor="end">34.4%</text><text x="1280" y="355" text-anchor="end">49.5%</text><text x="1565" y="355" text-anchor="end" font-weight="700">64.5%</text>
+</g></svg>
