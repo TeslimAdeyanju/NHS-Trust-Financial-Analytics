@@ -8,6 +8,28 @@
 
 ---
 
+## Statement-aware cleaning and quality controls
+
+The TAC illustrative reporting template distinguishes three core statements: **TAC02 SoCI** (income and comprehensive income), **TAC03 SoFP** (financial position) and **TAC05 SoCF** (cash flows). The warehouse should preserve `worksheet_name`, `main_code`, `sub_code`, reporting year, original signed amount and source filename at the financial-fact grain.
+
+### Cleaning rules before Silver promotion
+
+1. **Source and worksheet identity:** Validate the sheet identifiers and expected source columns for each reporting year. Do not assume every template version has identical layouts.
+2. **Current-year/prior-year separation:** Confirm the extraction of `CY` and `PY` from MainCode before filtering current-year data. Keep comparable periods distinct to avoid duplicate years.
+3. **Accounting sign:** Store expenses, liabilities and cash outflows as signed source amounts. Invert them only in explicitly named presentation measures where needed.
+4. **Subtotals:** Mark statement totals and intermediate subtotal codes. Never aggregate them together with their constituent detail rows.
+5. **Completeness:** Distinguish missing values and unreported statement lines from genuine zeros; verify availability of SoCI, SoFP and SoCF for each provider/year.
+6. **Business grain:** Detect duplicate `org_code + financial_year + worksheet_name + main_code + sub_code` records before pivoting with MAX. Investigate source keys before deduplicating.
+7. **Provider population:** Match ODS identifiers and confirm changes in the published annual population rather than presuming a constant provider count.
+8. **Reconciliation:** After Gold views are created, evaluate `sql/views/v_statement_reconciliation.sql` and investigate non-zero residuals and nulls.
+
+**Limitation:** The current pipeline has not yet been executed end-to-end against the uploaded illustrative template. These are documented validation requirements, not evidence of passing checks.
+
+Related implementation: [TAC schema](../../sql/schema/create_tables_mysql.sql), [validation script](../../python/transformation/validate_tac_data.py), [reconciliation SQL](../../sql/views/v_statement_reconciliation.sql).
+
+---
+
+
 ## Why a Separate Staging Database
 
 The project uses a three-database **medallion** split — Bronze (raw landing), Silver (conformed dims/fact,
