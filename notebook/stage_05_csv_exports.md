@@ -1,4 +1,6 @@
-# Stage ⑤ — CSV Exports
+# Stage 5: Data Preparation for Reporting
+
+**Implementation:** Export of curated Gold analytical views as CSVs for Power BI.
 
 > `data/processed/powerbi_export/` — populated by `python/reporting/export_for_powerbi.py`, which
 > queries the views and tables from [stage ④](stage_04_mysql_analytics.md) — connecting to `nhs_gold`,
