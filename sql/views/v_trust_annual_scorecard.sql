@@ -72,9 +72,7 @@ SELECT
 
     -- ── Derived flags ───────────────────────────────────────────────────────
     CASE WHEN k.operating_surplus_000s < 0 THEN 1 ELSE 0 END AS is_deficit,
-    CASE WHEN k.ebitda_margin_pct < 2 THEN 'Red'
-         WHEN k.ebitda_margin_pct < 5 THEN 'Amber'
-         ELSE 'Green' END AS ebitda_rag,
+    k.ebitda_rag AS ebitda_rag,
     CASE WHEN k.net_surplus_000s < 0 THEN 'Red'
          WHEN k.net_surplus_000s = 0 THEN 'Amber'
          ELSE 'Green' END AS surplus_rag
