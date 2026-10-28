@@ -1,4 +1,6 @@
-# Stage ⑥ — Power BI Dashboard
+# Stage 6: Data Visualisation & Insights
+
+**Implementation:** Power BI semantic model, DAX and proposed report pages (publication pending).
 
 > Imports the eleven CSVs from [stage ⑤](stage_05_csv_exports.md) (or connects directly to
 > [stage ④](stage_04_mysql_analytics.md) via DirectQuery), builds the model relationships and DAX
