@@ -1,20 +1,14 @@
 # NHS Trust Financial Analytics
 
-> An NHS financial analytics project transforming published Trust Accounts Consolidation data into comparable financial measures and reporting outputs for trusts in England.
-
 **Period:** 2021/22 to 2023/24 | **Scope:** NHS Trusts and Foundation Trusts | **Tools:** Python, MySQL, SQL, Power BI and DAX
 
-## The question behind the project
+## The research question
 
 > **How is the financial health of NHS Trusts in England changing over time, and which parts of the health system are under the most pressure?**
 
-This question drives the analysis, from understanding changes in provider income and expenditure to identifying where financial pressures are most pronounced.
+Using NHS England's published Trust Accounts Consolidation data, this project investigates changes in income, expenditure and financial performance across NHS providers over three financial years. It combines Python data processing, MySQL analytics and a Power BI reporting model to make the financial patterns easier to investigate and compare.
 
-## Project overview
-
-This project examines the financial sustainability of NHS providers by combining annual accounts data, standardising financial measures and comparing performance across organisations and reporting years.
-
-It includes a six-stage data pipeline, SQL-based financial analysis, audit and validation logic, and a Power BI reporting model. The detailed business context, implementation decisions and technical evidence are maintained in [Project Documentation](PROJECT_DOCUMENTATION.md).
+[Explore the full project documentation](PROJECT_DOCUMENTATION.md).
 
 ## Key findings
 
@@ -35,7 +29,9 @@ It includes a six-stage data pipeline, SQL-based financial analysis, audit and v
   </tbody>
 </table>
 
-**Headline:** In the project's historical analysis, the provider sector shifted from a reported £1.6bn operating surplus to a £1.6bn deficit over two years. In 2023/24, 124 of 206 trusts were reported as being in deficit.
+**Key insight:** Across the three financial years analysed, reported provider expenditure grew faster than income, alongside a deterioration from an operating surplus to a deficit. The number of trusts reporting deficits rose from 37 to 124, highlighting widening financial pressure across NHS providers.
+
+**Why it matters:** These trends raise important questions about cost pressures, the sustainability of provider finances and differences in performance across trusts. The detailed financial review investigates those questions without treating the headline figures alone as proof of any single cause.
 
 Figures are taken from the project's existing analysis, not newly audited in this README revision. For calculations, assumptions, financial conventions and interpretation, read the [2023/24 Financial Review](reports/nhs_sector_financial_review_2324.md).
 
