@@ -108,6 +108,20 @@ of the NHS Trust sector's deterioration into collective deficit.
 
 ---
 
+### Local database configuration
+
+**Database configuration:** The ingestion script now reads `DB_USER`, `DB_PASSWORD`, `DB_HOST` and `DB_PORT` from environment variables. Set `DB_PASSWORD` in your local shell or an untracked environment configuration before running it. Example (replace the placeholder only on your computer):
+
+```bash
+export DB_USER=root
+export DB_HOST=127.0.0.1
+export DB_PORT=3306
+export DB_PASSWORD='your-local-mysql-password'
+python python/ingestion/load_tac_data.py
+```
+
+The former hard-coded credential has been removed from the current script. If that password was used on a real system, rotate it; an ordinary Git commit does not erase historical values from repository history.
+
 ## 2. NHS BACKGROUND AND BUSINESS CONTEXT
 
 ### What is the NHS?
