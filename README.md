@@ -2,14 +2,15 @@
 
 **Period:** 2021/22 to 2023/24 | **Scope:** NHS Trusts and Foundation Trusts | **Tools:** Python, MySQL, SQL, Power BI and DAX
 
-
 ## The research question
 
 > **How is the financial health of NHS Trusts in England changing over time, and which parts of the health system are under the most pressure?**
 
-Using NHS England's published Trust Accounts Consolidation data, this project investigates changes in income, expenditure and financial performance across NHS providers over three financial years. It combines Python data processing, MySQL analytics and a Power BI reporting model to make the financial patterns easier to investigate and compare.
+**What the analysis found:** Between 2021/22 and 2023/24, the sector's reported operating position deteriorated from a £1.6bn surplus to a £1.6bn deficit. Provider expenditure rose faster than income, while the number of trusts reporting deficits increased from 37 of 211 to 124 of 206. These findings point to growing financial pressure across NHS providers, although the headline figures alone do not establish which individual trusts or cost categories experienced the greatest pressure.
 
-[Explore the full project documentation](PROJECT_DOCUMENTATION.md).
+**How I investigated it:** I used NHS England's published Trust Accounts Consolidation data for three financial years, processed and standardised the source records with Python, and developed MySQL analytical views and financial measures for cross-year and trust-level comparison. The project also includes a Power BI reporting model; the dashboard itself is pending publication.
+
+[Explore the full project methodology and documentation](PROJECT_DOCUMENTATION.md).
 
 ## Key findings
 
@@ -30,9 +31,7 @@ Using NHS England's published Trust Accounts Consolidation data, this project in
   </tbody>
 </table>
 
-**Key insight:** Across the three financial years analysed, reported provider expenditure grew faster than income, alongside a deterioration from an operating surplus to a deficit. The number of trusts reporting deficits rose from 37 to 124, highlighting widening financial pressure across NHS providers.
-
-**Why it matters:** These trends raise important questions about cost pressures, the sustainability of provider finances and differences in performance across trusts. The detailed financial review investigates those questions without treating the headline figures alone as proof of any single cause.
+**Why it matters:** The figures reveal a widening financial sustainability challenge and make it important to investigate which providers and spending categories face the greatest pressure. They do not, by themselves, establish a single cause of the deterioration.
 
 Figures are taken from the project's existing analysis, not newly audited in this README revision. For calculations, assumptions, financial conventions and interpretation, read the [2023/24 Financial Review](reports/nhs_sector_financial_review_2324.md).
 
@@ -40,7 +39,7 @@ Figures are taken from the project's existing analysis, not newly audited in thi
 
 **Dashboard publication pending.** The repository includes the Power BI model reference, report page specifications and DAX measure definitions, but no published report or report-page screenshot is available to link here yet.
 
-The planned report presentation includes an executive summary, income and expenditure analysis, cost pressures, trust benchmarking and workforce measures. Once the dashboard is ready, this section will show a genuine screenshot and a verified report link.
+The report design covers an executive summary, income and expenditure, cost pressures, trust benchmarking and workforce analysis. A genuine dashboard screenshot and verified report link will be added after publication.
 
 [Power BI setup guide](power_bi/setup_guide.md) | [DAX measures](power_bi/dax_measures.md)
 
