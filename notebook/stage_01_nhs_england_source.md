@@ -1,4 +1,6 @@
-# Stage ① — NHS England (Source)
+# Stage 1: Data Sourcing
+
+**Implementation:** NHS England TAC publications and source provenance.
 
 > There is no code in this stage. It exists so every later stage has a named starting point:
 > the exact publication this entire project is built on, and why it can't be queried directly.
