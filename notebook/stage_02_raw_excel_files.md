@@ -1,4 +1,6 @@
-# Stage ② — Raw Excel Files
+# Stage 2: Data Ingestion
+
+**Implementation:** Original Excel workbooks saved to data/raw/; Python acquisition and landing in Bronze staging.
 
 > This stage is about understanding the exact shape of the data before any code runs. The Python
 > pipeline receives these files and has to deal with exactly what NHS England published — no cleaning,
