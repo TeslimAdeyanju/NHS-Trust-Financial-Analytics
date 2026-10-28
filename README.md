@@ -4,6 +4,12 @@
 
 **Period:** 2021/22 to 2023/24 | **Scope:** NHS Trusts and Foundation Trusts | **Tools:** Python, MySQL, SQL, Power BI and DAX
 
+## The question behind the project
+
+> **How is the financial health of NHS Trusts in England changing over time, and which parts of the health system are under the most pressure?**
+
+This question drives the analysis, from understanding changes in provider income and expenditure to identifying where financial pressures are most pronounced.
+
 ## Project overview
 
 This project examines the financial sustainability of NHS providers by combining annual accounts data, standardising financial measures and comparing performance across organisations and reporting years.
