@@ -3,7 +3,7 @@
 **Implementation:** Export of curated Gold analytical views as CSVs for Power BI.
 
 > `data/processed/powerbi_export/` — populated by `python/reporting/export_for_powerbi.py`, which
-> queries the views and tables from [stage ④](stage_04_mysql_analytics.md) — connecting to `nhs_gold`,
+> queries the views and tables from [stage ④](../04-data-modelling-and-analytics/README.md) — connecting to `nhs_gold`,
 > fully-qualifying `nhs_silver.dim_trust`/`nhs_silver.dim_subcode` for the joins that need them — and
 > writes eleven CSVs in roughly 30 seconds. This stage's only job is portability: turn a live database
 > dependency into flat files any tool — Power BI, a reviewer with no MySQL access — can consume.
@@ -93,7 +93,7 @@ query itself, so the CSV lands in **£millions**, not £000s:
 ROUND(SUM(total_income_000s) / 1000, 0) AS total_income_m,
 ```
 
-This is the one deliberate exception to the £000s rule established back in [stage ①](stage_01_nhs_england_source.md):
+This is the one deliberate exception to the £000s rule established back in [stage ①](../01-data-sourcing/README.md):
 sector-level sums in £000s run to eight figures and stop being readable on a benchmarking chart axis.
 
 ---
@@ -134,10 +134,10 @@ Full column-by-column schema for each file is in `PROJECT_DOCUMENTATION.md`, sta
 
 | File | What to Read |
 |------|-------------|
-| [python/reporting/export_for_powerbi.py](../python/reporting/export_for_powerbi.py) | Full script — `export_query()` plus all ten `export_*()` functions |
-| [PROJECT_DOCUMENTATION.md](../PROJECT_DOCUMENTATION.md), stage ⑤ | The narrative version, plus the full per-file column schema and the Power BI model diagram |
+| [python/reporting/export_for_powerbi.py](../../python/reporting/export_for_powerbi.py) | Full script — `export_query()` plus all ten `export_*()` functions |
+| [PROJECT_DOCUMENTATION.md](../../PROJECT_DOCUMENTATION.md), stage ⑤ | The narrative version, plus the full per-file column schema and the Power BI model diagram |
 
 ---
 
-*Previous: [Stage ④ — MySQL Analytics](stage_04_mysql_analytics.md)*
-*Next: [Stage ⑥ — Power BI Dashboard](stage_06_powerbi_dashboard.md)*
+*Previous: [Stage ④ — MySQL Analytics](../04-data-modelling-and-analytics/README.md)*
+*Next: [Stage ⑥ — Power BI Dashboard](../06-data-visualisation-and-insights/README.md)*

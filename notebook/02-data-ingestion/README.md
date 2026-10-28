@@ -54,7 +54,7 @@ Small lookup table, one row per trust (66 or 140 rows).
 | Region | `North East and Yorkshire` |
 | Sector | `Acute` |
 
-![Screenshot of the List of Providers sheet, showing each provider's full name, NHS code, authorisation date, region, and sector.](../docs/images/List%20of%20Providers.png)
+![Screenshot of the List of Providers sheet, showing each provider's full name, NHS code, authorisation date, region, and sector.](../../docs/images/List%20of%20Providers.png)
 
 **Purpose:** provides the ODS code for each trust by name. The "All data" sheet has names, not codes —
 this sheet resolves that gap. The source also includes authorisation dates, but the current pipeline does
@@ -86,7 +86,7 @@ line item.
 Each row is one reported amount. The schedule and table show where it came from; `MainCode` identifies its
 column; `RowNumber` and `SubCode` identify the line item. The value is in £000s.
 
-![2021/22 All data rows for Airedale NHS Foundation Trust. The visible fields are Organisation Name, WorkSheetName, TableID, MainCode, RowNumber, SubCode, and Value number.](../docs/images/data_sample.png)
+![2021/22 All data rows for Airedale NHS Foundation Trust. The visible fields are Organisation Name, WorkSheetName, TableID, MainCode, RowNumber, SubCode, and Value number.](../../docs/images/data_sample.png)
 
 In the first row, `Airedale NHS Foundation Trust` is the organisation, `TAC02 SoCI` is the schedule,
 `TableID` is 1, and `A02CY01` identifies the current-year column. `RowNumber` 12 and `SubCode` `SCI0100A`
@@ -103,7 +103,7 @@ In the original TAC table, `SubCode` labels the line and `MainCode` labels the v
 flattens their intersection into one record. In the screenshot, `A02PY01` marks the prior-year comparison
 column alongside `A02CY01`. Because this is the 2021/22 workbook, its PY values are for 2020/21. The
 pipeline drops PY rows and keeps CY rows to avoid counting comparison years again when workbooks are
-combined. The filter runs during [stage ③](stage_03_mysql_staging.md).
+combined. The filter runs during [stage ③](../03-data-cleaning-and-transformation/README.md).
 
 ---
 
@@ -184,10 +184,10 @@ else happens. Rename a file and the pipeline mis-tags every row inside it — th
 |------|-------------|
 | [data/raw/](../data/raw/) | Open any TAC `.xlsx` in Excel — examine both sheets directly |
 | [agent_docs/data_dictionary.md](../agent_docs/data_dictionary.md) | Full SubCode reference, MainCode format, data-quality notes |
-| [PROJECT_DOCUMENTATION.md](../PROJECT_DOCUMENTATION.md), stage ② | The narrative version, plus the "how I sourced the data" story |
-| [python/ingestion/load_tac_data.py](../python/ingestion/load_tac_data.py) | `filename_to_financial_year()`, `filename_to_trust_type()`, `read_provider_list()`, `read_all_data()` |
+| [PROJECT_DOCUMENTATION.md](../../PROJECT_DOCUMENTATION.md), stage ② | The narrative version, plus the "how I sourced the data" story |
+| [python/ingestion/load_tac_data.py](../../python/ingestion/load_tac_data.py) | `filename_to_financial_year()`, `filename_to_trust_type()`, `read_provider_list()`, `read_all_data()` |
 
 ---
 
-*Previous: [Stage ① — NHS England (Source)](stage_01_nhs_england_source.md)*
-*Next: [Stage ③ — MySQL Staging](stage_03_mysql_staging.md)*
+*Previous: [Stage ① — NHS England (Source)](../01-data-sourcing/README.md)*
+*Next: [Stage ③ — MySQL Staging](../03-data-cleaning-and-transformation/README.md)*

@@ -11,7 +11,7 @@
 ## Why a Separate Staging Database
 
 The project uses a three-database **medallion** split — Bronze (raw landing), Silver (conformed dims/fact,
-see [stage ④](stage_04_mysql_analytics.md)), Gold (curated analytical views, also stage ④):
+see [stage ④](../04-data-modelling-and-analytics/README.md)), Gold (curated analytical views, also stage ④):
 
 ```sql
 CREATE DATABASE IF NOT EXISTS nhs_bronze; -- staging (buffer) — this stage
@@ -51,7 +51,7 @@ df = pd.read_excel(path, sheet_name=sheet_name, header=0, dtype={
 })
 ```
 
-**Step B — Normalise column names** (the 2021/22-vs-later inconsistency from [stage ②](stage_02_raw_excel_files.md)):
+**Step B — Normalise column names** (the 2021/22-vs-later inconsistency from [stage ②](../02-data-ingestion/README.md)):
 
 ```python
 col_map = {
@@ -178,12 +178,12 @@ within the same year *and* file type.
 
 | File | What to Read |
 |------|-------------|
-| [python/ingestion/load_tac_data.py](../python/ingestion/load_tac_data.py) | `read_provider_list()`, `read_all_data()`, `validate()`, `load_staging()` |
-| [sql/schema/create_tables_mysql.sql](../sql/schema/create_tables_mysql.sql) | `stg_tac_raw` and `stg_provider_list` DDL |
-| [python/CLAUDE.md](../python/CLAUDE.md) | Pandas patterns, hardcoded-connection rationale, validation pattern |
-| [PROJECT_DOCUMENTATION.md](../PROJECT_DOCUMENTATION.md), stage ③ | The narrative version, plus the client/server MySQL diagram |
+| [python/ingestion/load_tac_data.py](../../python/ingestion/load_tac_data.py) | `read_provider_list()`, `read_all_data()`, `validate()`, `load_staging()` |
+| [sql/schema/create_tables_mysql.sql](../../sql/schema/create_tables_mysql.sql) | `stg_tac_raw` and `stg_provider_list` DDL |
+| [python/CLAUDE.md](../../python/CLAUDE.md) | Pandas patterns, hardcoded-connection rationale, validation pattern |
+| [PROJECT_DOCUMENTATION.md](../../PROJECT_DOCUMENTATION.md), stage ③ | The narrative version, plus the client/server MySQL diagram |
 
 ---
 
-*Previous: [Stage ② — Raw Excel Files](stage_02_raw_excel_files.md)*
-*Next: [Stage ④ — MySQL Analytics](stage_04_mysql_analytics.md)*
+*Previous: [Stage ② — Raw Excel Files](../02-data-ingestion/README.md)*
+*Next: [Stage ④ — MySQL Analytics](../04-data-modelling-and-analytics/README.md)*

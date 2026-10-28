@@ -41,14 +41,14 @@ exception:
   calendar-year or calendar-month column, because none exists.
 - **Currency:** every monetary figure NHS England publishes is in **£ thousands (£000s)**. This project
   keeps that unit all the way through SQL and CSV, and converts to £m only at the very last step — inside
-  DAX measures on import into Power BI (see [stage ⑥](stage_06_powerbi_dashboard.md)).
+  DAX measures on import into Power BI (see [stage ⑥](../06-data-visualisation-and-insights/README.md)).
 
 ## No Code Here — By Design
 
 There's nothing to link to in this stage's "Relevant Files" the way later stages link to a `.py` or `.sql`
 file, because nothing in this repository runs here. That absence is itself the point: it's the boundary
 between "data NHS England is responsible for" and "code I'm responsible for," which is exactly why
-[stage ②](stage_02_raw_excel_files.md) treats the downloaded files as fixed input to audit against, not
+[stage ②](../02-data-ingestion/README.md) treats the downloaded files as fixed input to audit against, not
 something to clean in place.
 
 ---
@@ -57,9 +57,9 @@ something to clean in place.
 
 | File | What to Read |
 |------|-------------|
-| [PROJECT_DOCUMENTATION.md](../PROJECT_DOCUMENTATION.md), stage ① | The narrative version of this stage, plus the business case for the whole project |
-| [PROJECT_DOCUMENTATION.md](../PROJECT_DOCUMENTATION.md), Sections 1–3 | NHS background, the financial crisis in numbers, project objectives |
+| [PROJECT_DOCUMENTATION.md](../../PROJECT_DOCUMENTATION.md), stage ① | The narrative version of this stage, plus the business case for the whole project |
+| [PROJECT_DOCUMENTATION.md](../../PROJECT_DOCUMENTATION.md), Sections 1–3 | NHS background, the financial crisis in numbers, project objectives |
 
 ---
 
-*Next: [Stage ② — Raw Excel Files](stage_02_raw_excel_files.md)*
+*Next: [Stage ② — Raw Excel Files](../02-data-ingestion/README.md)*

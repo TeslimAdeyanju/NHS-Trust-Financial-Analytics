@@ -18,7 +18,7 @@ This document explains the business question, NHS accounting context, implemente
 
 - [Methodology: Six-Stage Data Analytics Lifecycle](#methodology-six-stage-data-analytics-lifecycle)
 
-The six technical stages are grouped under Methodology, with their own navigation list.
+The six stages are summarised as a coherent research process. Detailed implementation, source structures, SQL and Power BI notes are maintained in stage-specific notebooks.
 
 ### Part III — Findings, Validation and Project Outcomes
 
@@ -154,239 +154,85 @@ The [original detailed technical architecture diagram](docs/images/pipeline_arch
 
 ## Stage 1 — Data Sourcing
 
-**Purpose:** Establish the provenance, reporting scope and accounting context of every input.
+**Purpose.** Establish the source, time frame and accounting basis for the investigation.
 
-NHS England publishes TAC information as annual workbooks. This project was designed around two datasets for each of three reporting years—one NHS trust workbook and one foundation trust workbook—giving **six expected source files**. Source files must be downloaded from the official publication rather than treated as permanently reproducible merely because a filename is known.
+I selected NHS England's annual Trust Accounts Consolidation (TAC) releases to investigate the financial position of NHS Trusts and Foundation Trusts from 2021/22 to 2023/24. The source documents represent public financial reporting information, rather than a manually compiled sample. Each year requires separate NHS Trust and Foundation Trust workbooks, giving six expected input workbooks.
 
-Expected local naming pattern:
+The main decisions at this stage are which reporting years to examine, which accounting schedules to use, and how to record the official publication, version, provider population and monetary units. Documenting these choices allows a later reviewer to distinguish genuine financial changes from differences in source coverage or reporting definitions.
 
-```text
-data/raw/TAC_NHS_trusts_2021-22.xlsx
-data/raw/TAC_NHS_foundation_trusts_2021-22.xlsx
-data/raw/TAC_NHS_trusts_2022-23.xlsx
-data/raw/TAC_NHS_foundation_trusts_2022-23.xlsx
-data/raw/TAC_NHS_trusts_2023-24.xlsx
-data/raw/TAC_NHS_foundation_trusts_2023-24.xlsx
-```
+**Output:** Six identified source workbooks and a documented source/accounting scope.
 
-### Source selection and control
-
-For each workbook, record: the issuing organisation, exact page URL, file version and download date, filename, checksum, financial year, trust type, provider count, currency units and sign convention. These are **required reproducibility controls**, not all fully evidenced as completed in the current repository.
-
-The provider roster supplies organisation identifiers and descriptive metadata such as sector and region. The `All data` sheet includes long-form financial entries: organisation name, worksheet, main code, SubCode and amount. Different annual templates may use slightly different column names.
-
-**Reference:** [Stage 1 technical note](notebook/stage_01_nhs_england_source.md) and [TAC source publication](https://www.england.nhs.uk/financial-accounting-reporting-systems/nhs-england-finance-returns-publications-guidance/trust-accounts-consolidation-tac/).
-
-**Output of this stage:** A documented, versioned source dataset and a justified accounting population.
+**Technical notebook:** [Stage 1 — Data Sourcing](notebook/01-data-sourcing/README.md), including source detail, publication conventions and file provenance.
 
 ---
 
 ## Stage 2 — Data Ingestion
 
-**Purpose:** Load identifiable source records without losing their origin.
+**Purpose.** Bring the published data into a controlled environment while preserving its origin.
 
-The raw workbooks reside in `data/raw/` and are excluded from Git due to size and licensing/republication considerations. The implemented script `python/ingestion/load_tac_data.py` reads provider rosters and `All data` schedules, normalises column headings, parses a financial-year token from filenames and assigns a trust type from the filename.
+I designed the ingestion process to retain the original Excel files as the fixed source snapshot and use Python to load the relevant financial records and provider lists into the MySQL Bronze layer. Keeping the raw inputs separate from transformed records provides a reference point when discrepancies appear later in the analysis.
 
-### Bronze landing
+The process also captures the financial year, trust type and source-file context. This is essential because the project combines several annual releases that may not have identical column naming or organisational coverage. Repeatable ingestion is an objective, but full idempotence across all warehouse layers still requires testing.
 
-The ingestion process writes to MySQL `nhs_bronze.stg_provider_list` and `nhs_bronze.stg_tac_raw`. These staging datasets preserve source file, trust type, financial year, reporting codes and source amounts. For a given year/type pair the script deletes existing staging rows before appending a replacement batch; this is a design for controlled reloads, **not proof of end-to-end idempotence** once Silver dimensions and facts are considered.
+**Output:** Traceable source records in the Bronze staging area.
 
-Simplified flow:
-
-```text
-NHS England TAC workbook
-    -> Python Excel reader / schema normalisation
-    -> provider list + long-form accounting records
-    -> MySQL Bronze staging
-```
-
-### Ingestion controls to verify
-
-- Verify that each expected workbook exists, has the required sheets and uses the expected accounting units.
-- Ensure row-count and provider-count changes are visible rather than silently accepted.
-- Check duplicates using a business key that includes all required TAC dimensions.
-- Check whether the script's `MainCode` logic correctly distinguishes current-year from prior-year fields in every version.
-- Ensure organisation-name matching cannot assign the wrong ODS code because of spelling changes, mergers or duplicate names.
-- Validate that an interrupted load does not leave one year/type incomplete.
-
-The current ingestion script has been changed to read a MySQL password from the environment; **other scripts have not all been updated to the same standard** (see Section 12).
-
-**Reference:** [Stage 2 technical note](notebook/stage_02_raw_excel_files.md), [ingestion script](python/ingestion/load_tac_data.py).
-
-**Output:** A traceable Bronze landing of each selected source workbook.
+**Technical notebook:** [Stage 2 — Data Ingestion](notebook/02-data-ingestion/README.md), including workbook structure, raw tables and Python loading procedure.
 
 ---
 
 ## Stage 3 — Data Cleaning & Transformation
 
-**Purpose:** Convert raw financial records into consistent, analysable data while preserving an audit path.
+**Purpose.** Make financial records consistent and trustworthy enough to combine across reporting years.
 
-The repository contains `python/transformation/transform_tac_data.py` and `python/transformation/validate_tac_data.py`, in addition to transformation logic performed during ingestion and promotion to MySQL Silver. These pieces must be understood as a connected workflow, not as one single cleaning function.
+I standardise reporting fields, normalise organisation identifiers and distinguish current-year amounts from comparative figures. I then apply checks for missing information, duplicate financial codes, sign conventions and differences in the provider population. This step is particularly important for NHS financial analysis because a missing provider or misclassified accounting line can alter a national total or the proportion of trusts reporting deficits.
 
-### Core transformation responsibilities
+Validated information is organised in the Silver layer, where providers and accounting transactions can be analysed across years. Outstanding issues must remain visible in validation results rather than be silently corrected.
 
-| Activity | Why it matters |
-| --- | --- |
-| Standardise schema and text fields | Different annual workbooks may label equivalent fields differently |
-| Identify financial year and reporting type | Avoid mixing current-year values with prior-year comparatives |
-| Standardise provider IDs | Enable longitudinal trust analysis through ODS codes |
-| Preserve worksheet and SubCode | Keep accounting meaning attached to every amount |
-| Check nulls and duplicates | Prevent missing amounts and double-counting |
-| Respect source signs and monetary units | Avoid false surplus, deficit or percentage results |
-| Validate dimensions and facts | Ensure provider/year joins do not create lost or duplicated rows |
+**Output:** Standardised, conformed financial records and a traceable validation trail.
 
-### Silver conformed data
-
-The principal conformed objects are `nhs_silver.dim_trust` and `nhs_silver.fct_tac`. The fact table is intentionally in long format: each accounting amount remains keyed by its code, financial year and organisation instead of being permanently flattened into many columns. Later views convert selected SubCodes into analytical measures.
-
-A critical design issue is **year-specific provider membership**. A single dimension of all trusts ever seen must not replace a validated annual provider roster when calculating the number or percentage of trusts in deficit.
-
-### Validation and handling exceptions
-
-The repository contains a validation script and `sql/views/v_validation_checks.sql`; the Python script writes a validation report to `data/processed/validation_report.csv`. Some thresholds in the validation script are expected ranges—not independently verified national accounting totals. Record the check name, severity, reporting year, observed result, expected basis and action taken.
-
-For national-level reconciliation, validation must be stronger than checking whether totals fall inside broad tolerances. Require explicit accounting and population matches or explain their remaining differences.
-
-**Reference:** [Stage 3 technical note](notebook/stage_03_mysql_staging.md), [transformation](python/transformation/transform_tac_data.py), [validation](python/transformation/validate_tac_data.py).
-
-**Output:** Cleaned and conformed Silver financial records with a documented exception trail.
+**Technical notebook:** [Stage 3 — Data Cleaning & Transformation](notebook/03-data-cleaning-and-transformation/README.md), including cleaning routines, Silver promotion and validation checks.
 
 ---
 
 ## Stage 4 — Data Modelling & Analytics
 
-**Purpose:** Turn verified accounting records into consistent analysis-ready measures and comparisons.
+**Purpose.** Transform accounting records into meaningful financial indicators and comparisons.
 
-### Star-schema structure
+The model separates provider information from detailed TAC financial records. SQL views then organise the long-form accounting lines into income, expenditure, workforce, profit-and-loss and balance-sheet measures. This supports year-on-year comparisons, provider benchmarking and analysis of financial pressure without losing the link to the original accounting SubCodes.
 
-The Silver layer separates provider attributes in `dim_trust` from long-form TAC entries in `fct_tac`. The Gold layer provides views that pivot selected codes into organisational annual summaries. Keep the annual grain explicit and check uniqueness of trust × financial year before joining separate reporting views.
+I treat **operating surplus**, **net surplus** and NHS England's published **surplus/deficit before impairments and transfers** as distinct measures. That distinction became especially important when the initial portfolio figures did not align with the official published financial balances. EBITDA and other RAG labels are analytical aids, not automatic NHS regulatory ratings.
 
-Principal SQL assets:
+**Output:** Analytical views and financial KPIs with explicit definitions and outstanding reconciliation checks.
 
-| View | Business use |
-| --- | --- |
-| `v_income_expenditure` | Operating income, expenditure, operating and net results |
-| `v_expenditure_breakdown` | Pay, non-pay and selected cost categories |
-| `v_workforce` | Whole-time equivalent workforce and staff cost measures |
-| `v_profit_and_loss` | Detailed statement of comprehensive income |
-| `v_balance_sheet` | Balance-sheet measures |
-| `v_kpis` | Derived annual financial indicators and project RAG bands |
-| `v_trust_annual_scorecard` | Combined provider/year reporting table |
-| `v_validation_checks` | Database-level diagnostic checks |
-
-For actual SQL definitions, use the files under [sql/views](sql/views/), not a copied query in a narrative. Financial subcode descriptions are documented in [data dictionary](agent_docs/data_dictionary.md).
-
-### Accounting measure mapping
-
-`v_income_expenditure.sql` currently maps:
-
-```sql
--- Source amounts are in £000s.
-SCI0100A -> patient_care_income_000s
-SCI0110A -> other_income_000s
-SCI0125A -> operating expenditure (made positive with ABS)
-SCI0140A -> operating_surplus_000s
-SCI0240  -> net_surplus_000s
-```
-
-These are the project's existing mappings. **They have not all been verified against the relevant source workbook schedules in the current review**. In particular, `SCI0140A` is not NHS England's published consolidated before-impairments-and-transfers result.
-
-### KPI formulas and interpretation
-
-| KPI | Implemented analytical formula | Interpretation / caution |
-| --- | --- | --- |
-| EBITDA (£000s) | Operating surplus + depreciation and amortisation | Verify the additive sign of depreciation/amortisation and source coverage |
-| EBITDA margin (%) | EBITDA ÷ total operating income × 100 | Supplementary indicator, not the official provider deficit |
-| Pay as % of income | Pay costs ÷ income × 100 | Verify agency/non-pay classification |
-| Cost per WTE | Staff costs (£000s) ÷ average WTE | Compare only with relevant staff mix and period |
-| Net surplus margin (%) | Net surplus ÷ income × 100 | Different from the published adjusted financial balance |
-
-The project's EBITDA RAG bands are **Green ≥5%**, **Amber ≥2% and <5%**, and **Red <2%**. These are **illustrative project categories**, not official NHS England regulatory thresholds. The current SQL implementation was updated to correct the calculation's operator precedence and to reuse the KPI RAG classification in the annual scorecard. Those revisions still require a database execution test.
-
-Likewise, the scorecard's `is_deficit` flag reflects the operating-result definition; it **must not** be presented as the official published count of providers in deficit.
-
-### Analysis questions supported
-
-- How did operating income and expenditure change over time?
-- How do the shares of pay, drugs and other costs vary by service sector?
-- Which providers have consistently negative operating results or unusually high expenditure?
-- How does net financial performance vary across regions or provider types?
-- Where do the provider-level figures diverge from published national totals, and why?
-
-Investigate population changes and accounting adjustments before interpreting trend movements as operational causes.
-
-**References:** [Stage 4 technical note](notebook/stage_04_mysql_analytics.md), [KPI definitions](agent_docs/kpi_definitions.md), [sector trend SQL](sql/analysis/sector_trend_analysis.sql), [benchmarking SQL](sql/analysis/benchmarking_analysis.sql).
-
-**Output:** SQL financial views, documented KPI logic and a trust-level analytical scorecard awaiting full reconciliation.
+**Technical notebook:** [Stage 4 — Data Modelling & Analytics](notebook/04-data-modelling-and-analytics/README.md), including the star schema, SQL view definitions, KPI logic and diagnostic queries.
 
 ---
 
 ## Stage 5 — Data Preparation for Reporting
 
-**Purpose:** Shape curated, analysable database outputs for a reporting tool without redefining the underlying accounting logic.
+**Purpose.** Prepare consistent datasets for a business intelligence report.
 
-The script `python/reporting/export_for_powerbi.py` exports dimensions, summary views, detailed financial categories and calculated KPIs into `data/processed/powerbi_export/`. The intended consumption pattern is **MySQL views → CSV → Power BI Import model**. The repository also contains a model and DAX guidance for connecting these files.
+I separate reporting preparation from analytical calculation so that Power BI consumes clearly defined financial tables rather than reproducing complex and potentially inconsistent SQL logic. The Gold analytical outputs are prepared as curated CSV exports, including provider information, annual financial summaries, expenditure categories and workforce measures.
 
-Representative outputs include:
+Before loading these files into the reporting model, the exported totals, provider-year grain, relationship keys and units must be checked against the database. This is necessary to avoid inflating amounts when different fact tables are joined or accidentally aggregating percentage measures.
 
-```text
-dim_trust.csv
-dim_financial_year.csv
-ie_summary.csv
-expenditure_breakdown.csv
-workforce.csv
-kpis.csv
-income_detail.csv
-expenditure_detail.csv
-profit_and_loss.csv
-balance_sheet.csv
-sector_benchmarks.csv
-```
+**Output:** Reporting-ready datasets, subject to a verified fresh export and reconciliation.
 
-The exact set generated by a given run must be confirmed against the export script and execution logs. The setup guide contains illustrative or previously observed row counts; these should not be used as validation evidence without a fresh export.
-
-### Reporting data checks
-
-Before loading Power BI:
-
-1. Confirm every expected CSV exists and has the intended column names and data types.
-2. Check financial-year and ODS-key coverage and uniqueness at each table's intended grain.
-3. Reconcile key totals from each CSV to its originating SQL view.
-4. Confirm currency units remain £000s and percentages are not inadvertently summed or re-scaled.
-5. Check that dimensional relationships cannot produce many-to-many inflation of totals.
-6. Version the export and record the corresponding source workbook set.
-
-A row-per-trust/year table should not be joined directly to another fact table as though it were a lookup dimension. Model relationships through appropriate trust/year dimensions and validate filter propagation.
-
-**References:** [Stage 5 technical note](notebook/stage_05_csv_exports.md), [export script](python/reporting/export_for_powerbi.py), [Power BI setup guide](power_bi/setup_guide.md).
-
-**Output:** Curated financial datasets suitable for a reviewed reporting model.
+**Technical notebook:** [Stage 5 — Data Preparation for Reporting](notebook/05-data-preparation-for-reporting/README.md), including export files, grain and Power BI data-model preparation.
 
 ---
 
 ## Stage 6 — Data Visualisation & Insights
 
-**Purpose:** Make reconciled financial information interpretable by a finance director, board member or analyst.
+**Purpose.** Turn validated financial analysis into information that finance professionals and board members can understand and explore.
 
-The repository contains [Power BI setup instructions](power_bi/setup_guide.md), [DAX measures](power_bi/dax_measures.md) and a model-measure definition file [`_Measures.tmdl`](power_bi/dax/_Measures.tmdl). **A published, verifiable Power BI report and genuine dashboard screenshot are not currently provided.** The pages below describe the intended reporting design, not a claimed deployed dashboard.
+The proposed Power BI report is designed to explain changes in provider financial position, income and expenditure, cost pressures, workforce costs and differences across trusts. A useful executive view should show clearly defined financial measures, reporting years and populations, with enough detail for a reader to investigate an unusual figure.
 
-| Proposed report page | Central questions |
-| --- | --- |
-| Executive financial summary | How are official and operational balances changing, and are they reconciled? |
-| Income and expenditure | How fast are income and expenditure changing, and by service sector? |
-| Cost pressures | What proportion of income is used by pay, drugs and other costs? |
-| Trust comparison | Which organisations differ on comparable, validated financial measures? |
-| Workforce | How do staffing levels and costs affect relative financial performance? |
+The dashboard is **not yet published**. Its final results should be produced only after resolving the financial reconciliation and validating the reporting data. The reporting design should distinguish official NHS England balances from the project's supplementary operating measures and avoid unsupported conclusions about the causes of financial pressure.
 
-### Presentation standards
+**Output:** Power BI modelling and report specifications; interactive publication remains pending.
 
-A trustworthy dashboard should label the accounting basis, reporting year, provider population, units and KPI calculation. Display **operating** and **published adjusted** results as separate measures. Link supporting measures to source/definition notes. Do not show project-defined Red/Amber/Green labels as NHS regulatory assessments.
-
-The primary executive page should provide a clear summary but avoid making unsupported claims of causation. Changes in accounting policy, population composition or source completeness can alter financial comparisons without corresponding changes in service quality.
-
-**References:** [Stage 6 technical note](notebook/stage_06_powerbi_dashboard.md), [Power BI setup guide](power_bi/setup_guide.md), [DAX measures](power_bi/dax_measures.md).
-
-**Status:** Model and report specification present; publication and end-to-end data validation remain pending.
+**Technical notebook:** [Stage 6 — Data Visualisation & Insights](notebook/06-data-visualisation-and-insights/README.md), including Power BI model guidance, proposed report pages and DAX references.
 
 ---
 
