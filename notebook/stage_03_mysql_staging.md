@@ -1,4 +1,6 @@
-# Stage ③ — MySQL Staging
+# Stage 3: Data Cleaning & Transformation
+
+**Implementation:** Quality checks, source standardisation and conforming into Silver dimensions/facts.
 
 > `nhs_bronze` — populated by `python/ingestion/load_tac_data.py`. This stage's only job is to get the
 > Excel data into a queryable form with the *minimum* transformation applied. No joins, no pivoting, no
