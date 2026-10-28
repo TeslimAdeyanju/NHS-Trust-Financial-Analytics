@@ -105,6 +105,8 @@ However, **financial accounts alone cannot establish the overall quality or effe
 
 For this project, financial sustainability means the capacity to meet obligations, manage resources and maintain safe healthcare delivery over time. **Covering annual costs is important but not sufficient**: liquidity, financial plans, cost pressures, productivity, capital commitments and continuity of patient services also matter.
 
+**Financial-statement-led modelling:** The illustrative TAC reporting template separates the **Statement of Comprehensive Income (TAC02 SoCI)**, **Statement of Financial Position (TAC03 SoFP)** and **Statement of Cash Flows (TAC05 SoCF)**. These are complementary perspectives on financial performance, financial position and liquidity. The pipeline therefore keeps accounting codes and signed values at source level, applies statement-aware cleaning, and produces separate Gold views for each statement, with cross-statement reconciliation diagnostics. The cash-flow view and diagnostics are newly added SQL definitions but remain untested against a populated database. For technical details see [Stage 3 — cleaning and validation](notebook/03-data-cleaning-and-transformation/README.md) and [Stage 4 — financial modelling and reconciliation](notebook/04-data-modelling-and-analytics/README.md).
+
 The project evaluates complementary measures:
 
 | Measure | Interpretation | Important qualification |
