@@ -2,6 +2,7 @@
 
 **Period:** 2021/22 to 2023/24 | **Scope:** NHS Trusts and Foundation Trusts | **Tools:** Python, MySQL, SQL, Power BI and DAX
 
+
 ## The research question
 
 > **How is the financial health of NHS Trusts in England changing over time, and which parts of the health system are under the most pressure?**
