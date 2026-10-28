@@ -252,7 +252,7 @@ This stage is entirely external to the system I built — it's the authoritative
 consuming, not producing, and there's no API: downloading requires accepting NHS England's terms of use on
 the page itself.
 
-For the source publication, cadence, and data-provenance context, see [Stage ① — NHS England (Source)](notebook/stage_01_nhs_england_source.md).
+For the source publication, cadence, and data-provenance context, see [Stage ① — NHS England (Source)](notebook/01-data-sourcing/README.md).
 
 ---
 
@@ -330,7 +330,7 @@ and one Foundation Trust workbook roughly 1.1 million. After the pipeline filter
 loads the three financial years, the fact table contains about **2.18 million rows**.
 
 For the detailed field walkthrough and how `MainCode` and CY/PY values work across annual files, see
-[Stage ② — Raw Excel Files](notebook/stage_02_raw_excel_files.md).
+[Stage ② — Raw Excel Files](notebook/02-data-ingestion/README.md).
 
 ---
 
@@ -342,7 +342,7 @@ data into a queryable form with the *minimum* transformation applied — one row
 table. I deliberately kept this stage "dumb": no joins, no pivoting, no business logic — just a faithful,
 query-able landing zone for what NHS England actually published.
 
-For the detailed staging walkthrough, including the load and validation steps, see [Stage ③ — MySQL Staging](notebook/stage_03_mysql_staging.md).
+For the detailed staging walkthrough, including the load and validation steps, see [Stage ③ — MySQL Staging](notebook/03-data-cleaning-and-transformation/README.md).
 
 ### Where this data actually lives
 
@@ -502,7 +502,7 @@ into the star schema below, and refreshes `dim_trust`. This is where the raw, EA
 becomes a conformed, indexed fact table with proper keys. `nhs_gold` sits on top of it, holding only the
 SQL views that pivot `nhs_silver.fct_tac` into KPI-ready and statement-shaped output.
 
-For the detailed schema and analytics walkthrough, see [Stage ④ — MySQL Analytics](notebook/stage_04_mysql_analytics.md).
+For the detailed schema and analytics walkthrough, see [Stage ④ — MySQL Analytics](notebook/04-data-modelling-and-analytics/README.md).
 
 ### Why the fact table is kept in long/narrow format
 
@@ -947,7 +947,7 @@ BI (or any other tool, or a reviewer with no MySQL access) can consume without a
 all. Power BI can alternatively connect directly to MySQL in DirectQuery mode — the views were designed to
 support that too.
 
-For the export process and the contents of each file, see [Stage ⑤ — CSV Exports](notebook/stage_05_csv_exports.md).
+For the export process and the contents of each file, see [Stage ⑤ — CSV Exports](notebook/05-data-preparation-for-reporting/README.md).
 
 ### Two implementation details that shape every file
 
@@ -1047,7 +1047,7 @@ the standard reporting tool in NHS finance departments.
 `dim_trust[sector]`, `dim_trust[region]`, and `dim_financial_year[financial_year]` are placed as slicers
 on every page, filtering all of that page's visuals simultaneously.
 
-For the dashboard setup, model, and page-by-page walkthrough, see [Stage ⑥ — Power BI Dashboard](notebook/stage_06_powerbi_dashboard.md).
+For the dashboard setup, model, and page-by-page walkthrough, see [Stage ⑥ — Power BI Dashboard](notebook/06-data-visualisation-and-insights/README.md).
 
 ### Report pages
 
