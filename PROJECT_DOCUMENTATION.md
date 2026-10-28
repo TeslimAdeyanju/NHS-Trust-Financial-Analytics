@@ -63,16 +63,18 @@ rather than an exercise against a toy dataset.
 
 ### Objectives
 
-1. **Ingest and consolidate** three years of published TAC data — six workbooks, 206 NHS organisations —
-   into a single, queryable data warehouse.
-2. **Build a reusable, idempotent pipeline** that can absorb a new year's data (or a corrected
-   re-publication of an existing year) without manual rework or risk of duplication.
-3. **Compute the core NHS financial KPIs** — EBITDA margin, pay % of income, cost per WTE, net surplus
-   margin — against NHS England's own published RAG thresholds, not an invented scoring system.
-4. **Keep the data model auditable**: every figure in the output should be traceable back to the exact
-   source file, TAC schedule, and SubCode it came from.
-5. **Deliver the result as an interactive dashboard** usable by a non-technical audience — a finance
-   director or board — not just as query output for another analyst.
+The project aims to:
+
+1. **Consolidate** three years of NHS TAC data from six workbooks, documenting differences in the provider population by year.
+2. **Build and validate a reusable pipeline** for ingestion, transformation and consistent reloads of corrected source data.
+3. **Calculate and reconcile financial measures**, including operating result, NHS England's published before-impairments-and-transfers balance, EBITDA margin, pay as a percentage of income and cost per WTE. Do not treat different accounting measures as equivalent.
+4. **Maintain auditability**, linking calculated values to source workbooks, TAC schedules, SubCodes and data-quality checks.
+5. **Investigate variations** in financial performance across organisations and years, distinguishing correlation from causation.
+6. **Develop a Power BI dashboard** for non-technical finance stakeholders once the figures have been validated. Dashboard publication remains pending.
+
+Any Red/Amber/Green bands used in this project are **project-defined analytical classifications**, not NHS England regulatory ratings, unless an applicable official threshold is explicitly sourced.
+
+See [the financial reconciliation workpaper](reports/nhs_financial_reconciliation.md) for the remaining validation work.
 
 ### Methodology
 
@@ -158,18 +160,17 @@ Foundation Trusts.
 
 ### What is financial sustainability for an NHS Trust?
 
-An NHS Trust is financially sustainable if it can cover all its costs from its income. This is measured
-by:
+Financial sustainability means managing resources and financial obligations while maintaining safe, effective services over time. It involves more than reporting a surplus in one financial year: financial balance, liquidity, cost control, delivery against plans and service responsibilities all matter.
 
-- **Operating surplus/deficit** — whether income exceeds expenditure after all running costs
-- **EBITDA margin** — earnings before interest, tax, depreciation and amortisation as a % of income; the
-  industry standard measure of operational sustainability
-- **Net surplus margin** — bottom-line surplus after finance costs and PDC dividends
+This project examines complementary measures:
 
-Regulatory expectations:
-- EBITDA margin ≥ 2% = financially sustainable (Green)
-- EBITDA margin 0–2% = at risk (Amber)
-- EBITDA margin < 0% = in deficit, subject to regulatory intervention (Red)
+- **Operating surplus or deficit:** Operating income less operating expenditure, using TAC `SCI0140A` in the current project. This is distinct from NHS England's official adjusted financial balance.
+- **Surplus or deficit before impairments and transfers:** The published NHS England financial measure used for external comparison; it requires separate mapping and reconciliation.
+- **EBITDA margin:** Project-calculated operating surplus plus depreciation and amortisation as a percentage of income. It is a supplementary indicator, not an official NHS-wide sustainability test.
+- **Net surplus margin:** The net reported accounting result as a percentage of income, subject to the precise accounting basis.
+- **Pay as a percentage of income and cost per WTE:** Workforce cost and efficiency indicators requiring consistent definitions.
+
+**Regulatory oversight:** NHS England assesses provider financial performance alongside other criteria under its [NHS Oversight Framework](https://www.england.nhs.uk/nhs-oversight-framework/). There is no verified universal NHS requirement that EBITDA of 2% denotes sustainability or that EBITDA below zero automatically triggers intervention. Dashboard RAG bands must therefore be labelled **illustrative project thresholds**, not regulatory determinations.
 
 ---
 
