@@ -30,7 +30,7 @@ The six stages are summarised as a coherent research process. Detailed implement
 
 ---
 
-**PART I — BACKGROUND AND RESEARCH CONTEXT**
+# PART I — BACKGROUND AND RESEARCH CONTEXT
 
 ## Research Question and Executive Summary
 
@@ -118,7 +118,7 @@ The warehouse may contain more organisational identifiers than a year-specific a
 
 ---
 
-**PART II — RESEARCH METHODOLOGY**
+# PART II — RESEARCH METHODOLOGY
 
 ## Methodology: Six-Stage Data Analytics Lifecycle
 
@@ -236,7 +236,7 @@ The dashboard is **not yet published**. Its final results should be produced onl
 
 ---
 
-**PART III — FINDINGS, VALIDATION AND PROJECT OUTCOMES**
+# PART III — FINDINGS, VALIDATION AND PROJECT OUTCOMES
 
 ## Financial Findings and Reconciliation
 
