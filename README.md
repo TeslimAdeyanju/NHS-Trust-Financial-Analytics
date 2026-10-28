@@ -12,12 +12,22 @@ It includes a six-stage data pipeline, SQL-based financial analysis, audit and v
 
 ## Key findings
 
-| Indicator | 2021/22 | 2022/23 | 2023/24 |
-| --- | ---: | ---: | ---: |
-| Total provider income | £110.3bn | £118.4bn | £129.2bn |
-| Total provider expenditure | £108.7bn | £118.2bn | £130.8bn |
-| Reported operating surplus / (deficit) | +£1.6bn | +£148m | **−£1.6bn** |
-| Trusts reporting a deficit | 37 of 211 | 85 of 207 | **124 of 206** |
+<table width="100%">
+  <thead>
+    <tr>
+      <th align="left" width="49%">Indicator</th>
+      <th align="right" width="17%">2021/22</th>
+      <th align="right" width="17%">2022/23</th>
+      <th align="right" width="17%">2023/24</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr><td>Total provider income</td><td align="right">£110.3bn</td><td align="right">£118.4bn</td><td align="right">£129.2bn</td></tr>
+    <tr><td>Total provider expenditure</td><td align="right">£108.7bn</td><td align="right">£118.2bn</td><td align="right">£130.8bn</td></tr>
+    <tr><td>Reported operating surplus / (deficit)</td><td align="right">+£1.6bn</td><td align="right">+£148m</td><td align="right"><strong>−£1.6bn</strong></td></tr>
+    <tr><td>Trusts reporting a deficit</td><td align="right">37 of 211</td><td align="right">85 of 207</td><td align="right"><strong>124 of 206</strong></td></tr>
+  </tbody>
+</table>
 
 **Headline:** In the project's historical analysis, the provider sector shifted from a reported £1.6bn operating surplus to a £1.6bn deficit over two years. In 2023/24, 124 of 206 trusts were reported as being in deficit.
 
