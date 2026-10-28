@@ -17,12 +17,12 @@
 **The Pipeline, Stage by Stage**
 
 - [The Six-Stage Pipeline](#the-six-stage-pipeline)
-- [① NHS England (Source)](#①-nhs-england-source)
-- [② Raw Excel Files](#②-raw-excel-files)
-- [③ MySQL Staging](#③-mysql-staging)
-- [④ MySQL Analytics](#④-mysql-analytics)
-- [⑤ CSV Exports](#⑤-csv-exports)
-- [⑥ Power BI Dashboard](#⑥-power-bi-dashboard)
+- [① Data Sourcing](#①-nhs-england-source)
+- [② Data Ingestion](#②-raw-excel-files)
+- [③ Data Cleaning & Transformation](#③-mysql-staging)
+- [④ Data Modelling & Analytics](#④-mysql-analytics)
+- [⑤ Data Preparation for Reporting](#⑤-csv-exports)
+- [⑥ Data Visualisation & Insights](#⑥-power-bi-dashboard)
 
 **Reference**
 
@@ -226,20 +226,19 @@ In just two years, the NHS Trust sector moved from a **£1.6bn surplus** to a **
 
 ## THE SIX-STAGE PIPELINE
 
-I designed the system as a **six-stage pipeline**, moving in one direction only — source to dashboard —
-where each stage is owned by a different technology and has exactly one job:
+I designed the system as a **six-stage analytics lifecycle**, from NHS England source data through to financial reporting. The stages describe the purpose of the work rather than a particular tool. The Bronze, Silver and Gold layers remain part of the technical implementation:
 
 <p align="center">
-<img src="docs/images/pipeline_architecture.png" width="480" alt="Six-stage pipeline architecture: NHS England source files are manually downloaded into data/raw/, ingested by load_tac_data.py into MySQL staging (nhs_bronze), joined and upserted into MySQL analytics (nhs_silver) as a star schema, pivoted by SQL views into nhs_gold, exported by export_for_powerbi.py to CSV, and imported into the Power BI dashboard." />
+<img src="docs/images/pipeline_architecture_stages.svg" width="100%" alt="Six-stage NHS financial analytics lifecycle: data sourcing, ingestion, cleaning and transformation, modelling and analytics, reporting preparation, and visualisation and insights." />
 </p>
 
-Each stage below is documented in the order data actually flows through it: what the stage is, why it
+The diagram uses lifecycle labels; the original technical diagram is retained at [docs/images/pipeline_architecture.png](docs/images/pipeline_architecture.png). Each stage below is documented in the order data actually flows through it: what the stage is, why it
 exists as its own step rather than being folded into the one before or after it, and the concrete
 code/SQL that implements it.
 
 ---
 
-## ① NHS ENGLAND (SOURCE)
+## ① DATA SOURCING
 
 The origin of every number in this project: NHS England's **Trust Accounts Consolidation (TAC)**
 publication — the annual process by which NHS England collects the audited financial accounts of every
@@ -257,7 +256,7 @@ For the source publication, cadence, and data-provenance context, see [Stage ①
 
 ---
 
-## ② RAW EXCEL FILES
+## ② DATA INGESTION
 
 `data/raw/` — a local, untouched copy of the six source workbooks (~170MB), pulled down manually since
 NHS England doesn't expose an API. This stage exists so every downstream step works from a **fixed,
@@ -335,7 +334,7 @@ For the detailed field walkthrough and how `MainCode` and CY/PY values work acro
 
 ---
 
-## ③ MYSQL STAGING
+## ③ DATA CLEANING & TRANSFORMATION
 
 `nhs_bronze` — populated by `python/ingestion/load_tac_data.py`. This stage's only job is to get the Excel
 data into a queryable form with the *minimum* transformation applied — one row per
@@ -495,7 +494,7 @@ Power BI is reading from.
 
 ---
 
-## ④ MYSQL ANALYTICS
+## ④ DATA MODELLING & ANALYTICS
 
 `nhs_silver` — populated by the same script's `promote_to_fact()` step, which joins staging data against
 the provider list to resolve each organisation name to its 3-character ODS code, then UPSERTs the result
@@ -939,7 +938,7 @@ national pay bill in each year, with NHS England funding only approximately 60�
 
 ---
 
-## ⑤ CSV EXPORTS
+## ⑤ DATA PREPARATION FOR REPORTING
 
 `data/processed/powerbi_export/` — populated by `python/reporting/export_for_powerbi.py`, which queries
 the views and tables in [stage ④](#④-mysql-analytics) and writes eleven CSV files in roughly 30 seconds.
@@ -1037,7 +1036,7 @@ in `power_bi/setup_guide.md`.
 
 ---
 
-## ⑥ POWER BI DASHBOARD
+## ⑥ DATA VISUALISATION & INSIGHTS
 
 Imports the stage-⑤ CSVs (or, alternatively, connects directly to stage ④ via DirectQuery), applies the
 model relationships and DAX measures from [stage ⑤](#⑤-csv-exports), and renders the five report pages
