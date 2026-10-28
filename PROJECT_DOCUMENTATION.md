@@ -135,7 +135,7 @@ The methodology is organised as six consecutive stages. Select a stage to go dir
 
 The project is explained using stages named for **the work performed**, not merely the software or storage location.
 
-![Six-stage NHS financial analytics lifecycle](docs/images/pipeline_architecture_stages.svg)
+![NHS financial analytics data engineering architecture with Bronze Silver Gold layers](docs/images/data_engineering_architecture.svg)
 
 | Stage | Purpose | Main assets / implementation |
 | --- | --- | --- |
@@ -148,7 +148,7 @@ The project is explained using stages named for **the work performed**, not mere
 
 **Technical architecture:** `nhs_bronze` is the raw landing area, `nhs_silver` contains conformed provider and TAC records, and `nhs_gold` exposes analytical reporting views. The stages overlap these storage layers: landing into Bronze is ingestion; transformation into Silver follows; Gold views are built for analysis and then exported for reporting.
 
-The [original detailed technical architecture diagram](docs/images/pipeline_architecture.png) is retained alongside the lifecycle visual.
+The [simplified lifecycle diagram](docs/images/pipeline_architecture_stages.svg) and [original technical architecture diagram](docs/images/pipeline_architecture.png) are retained as supporting references. The diagram above separates the main data flow from cross-cutting quality and reconciliation controls.
 
 ---
 
