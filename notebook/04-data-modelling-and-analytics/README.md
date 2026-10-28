@@ -10,6 +10,38 @@
 
 ---
 
+## Three-statement financial model
+
+The analytical model now explicitly distinguishes the three NHS financial statements instead of treating income and expenditure as a complete sustainability assessment.
+
+| Statement | Source worksheet | Gold view | Key measures |
+| --- | --- | --- | --- |
+| SoCI | `TAC02 SoCI` | [`v_profit_and_loss.sql`](../../sql/views/v_profit_and_loss.sql) | Operating surplus, net surplus, finance and comprehensive income |
+| SoFP | `TAC03 SoFP` | [`v_balance_sheet.sql`](../../sql/views/v_balance_sheet.sql) | Assets, liabilities, cash, reserves and equity |
+| SoCF | `TAC05 SoCF` | [`v_cash_flow.sql`](../../sql/views/v_cash_flow.sql) | Net operating (`SCF0180`), investing (`SCF0240`), financing (`SCF0315`) cash flows and closing cash (`SCF0355`) |
+
+The Silver `fct_tac` remains long-form and source-code traceable. In the Gold layer, individual accounting statement views pivot the selected statement lines to one trust/year row. This is a pragmatic extension of the existing schema, not a claim that all proposed future dimension tables are implemented.
+
+### Accounting reconciliation
+
+[`v_statement_reconciliation.sql`](../../sql/views/v_statement_reconciliation.sql) exposes diagnostic residuals for:
+
+- **SoCI:** Patient-care income + other operating income + signed operating expenses − operating surplus.
+- **SoFP:** Total assets employed − total equity.
+- **SoCF:** Operating + investing + financing net flows − net change in cash.
+- **SoFP to SoCF:** Closing SoFP cash − closing SoCF cash.
+
+A zero residual supports internal agreement **only if all required inputs and reporting definitions are correct**; null means unavailable and must not be silently treated as passing. Additional template-specific movements and accounting adjustments may have to be reconciled for opening/closing cash. These checks do **not** establish reconciliation to NHS England's national before-impairments-and-transfers performance measure.
+
+### Deployment order and review
+
+Run or refresh the SoCI and SoFP Gold views, then `v_cash_flow.sql`, then `v_statement_reconciliation.sql`. Check trust/year uniqueness and statement coverage before analysing residuals. Cross-year comparisons and ratios require consistent denominators and confirmed sign conventions.
+
+The new SQL views have not been executed against a populated MySQL database in this change. The original historical reconciliation remains preliminary: [financial reconciliation workpaper](../../reports/nhs_financial_reconciliation.md).
+
+---
+
+
 ## `populate_dim_trust()` — Slowly Changing Dimension, Type 1
 
 ```sql
