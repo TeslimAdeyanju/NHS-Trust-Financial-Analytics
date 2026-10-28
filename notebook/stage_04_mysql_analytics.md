@@ -1,4 +1,6 @@
-# Stage ④ — MySQL Analytics
+# Stage 4: Data Modelling & Analytics
+
+**Implementation:** MySQL Silver star schema and Gold SQL reporting views / KPI calculations.
 
 > `nhs_silver` — populated by the same script's `promote_to_fact()` and `populate_dim_trust()`. `nhs_gold`
 > — seven SQL views pivoted on top of it. This is where raw, EAV-shaped staging data becomes a conformed
