@@ -8,16 +8,22 @@ This document explains the business question, NHS accounting context, implemente
 
 ## Contents
 
+This document is organised into three parts, following the research process from **why the investigation was undertaken**, through **how it was conducted**, to **what the findings mean and how the work can be validated**.
+
+### Part I — Background and Research Context
+
 1. [Research question and executive summary](#1-research-question-and-executive-summary)
 2. [NHS financial reporting and sustainability](#2-nhs-financial-reporting-and-sustainability)
 3. [Objectives, scope and definitions](#3-objectives-scope-and-definitions)
-4. [Six-stage data analytics lifecycle](#4-six-stage-data-analytics-lifecycle)
-5. [Stage 1 — Data Sourcing](#5-stage-1--data-sourcing)
-6. [Stage 2 — Data Ingestion](#6-stage-2--data-ingestion)
-7. [Stage 3 — Data Cleaning & Transformation](#7-stage-3--data-cleaning--transformation)
-8. [Stage 4 — Data Modelling & Analytics](#8-stage-4--data-modelling--analytics)
-9. [Stage 5 — Data Preparation for Reporting](#9-stage-5--data-preparation-for-reporting)
-10. [Stage 6 — Data Visualisation & Insights](#10-stage-6--data-visualisation--insights)
+
+### Part II — Research Methodology
+
+4. [Methodology: Six-stage data analytics lifecycle](#4-methodology-six-stage-data-analytics-lifecycle)
+
+The six stages are explained together within the methodology section, from **Data Sourcing** to **Data Visualisation & Insights**. A stage-by-stage navigation list appears at the beginning of that section.
+
+### Part III — Findings, Validation and Project Outcomes
+
 11. [Financial findings and reconciliation](#11-financial-findings-and-reconciliation)
 12. [Data quality, auditability and limitations](#12-data-quality-auditability-and-limitations)
 13. [Reproducibility and operational workflow](#13-reproducibility-and-operational-workflow)
@@ -25,6 +31,8 @@ This document explains the business question, NHS accounting context, implemente
 15. [Glossary and reference material](#15-glossary-and-reference-material)
 
 ---
+
+**PART I — BACKGROUND AND RESEARCH CONTEXT**
 
 ## 1. Research question and executive summary
 
@@ -112,7 +120,20 @@ The warehouse may contain more organisational identifiers than a year-specific a
 
 ---
 
-## 4. Six-stage data analytics lifecycle
+**PART II — RESEARCH METHODOLOGY**
+
+## 4. Methodology: Six-stage data analytics lifecycle
+
+### Methodology roadmap
+
+The methodology is organised as six consecutive stages. Select a stage to go directly to its technical explanation:
+
+1. [Data Sourcing](#5-stage-1--data-sourcing) — obtain authoritative NHS England TAC data and define source controls.
+2. [Data Ingestion](#6-stage-2--data-ingestion) — capture source workbooks and load raw records to Bronze.
+3. [Data Cleaning & Transformation](#7-stage-3--data-cleaning--transformation) — standardise, validate and conform records in Silver.
+4. [Data Modelling & Analytics](#8-stage-4--data-modelling--analytics) — organise dimensions, facts and financial KPIs in Silver and Gold.
+5. [Data Preparation for Reporting](#9-stage-5--data-preparation-for-reporting) — prepare curated datasets and exports.
+6. [Data Visualisation & Insights](#10-stage-6--data-visualisation--insights) — design and communicate Power BI financial analysis.
 
 The project is explained using stages named for **the work performed**, not merely the software or storage location.
 
@@ -370,6 +391,8 @@ The primary executive page should provide a clear summary but avoid making unsup
 **Status:** Model and report specification present; publication and end-to-end data validation remain pending.
 
 ---
+
+**PART III — FINDINGS, VALIDATION AND PROJECT OUTCOMES**
 
 ## 11. Financial findings and reconciliation
 
