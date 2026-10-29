@@ -4,7 +4,7 @@
 
 This document explains the business question, NHS accounting context, implemented data architecture, six-stage processing lifecycle, analytical measures, published-account reconciliation and outstanding validation work. It is written for readers who want to understand **what the project does, why each design choice matters, how to reproduce it and which conclusions remain provisional**.
 
-**Project status (28 October 2026):** The repository contains ingestion, transformation, SQL modelling, validation, export and Power BI modelling assets. The final interactive Power BI dashboard has **not been published**, and the project's historical financial totals have **not yet been independently reconciled** from the raw TAC workbooks to NHS England's consolidated accounts. Code and documentation are evidence of implementation, not proof of a successful fresh execution.
+**Project status (29 October 2026):** The source-to-report pipeline has been freshly executed across all six TAC workbooks: 2,210,974 facts, 215 trusts, 633 trust-years, 18 passed validation checks, one non-critical warning, thirteen canonical exports and nine enriched outputs. The final interactive Power BI dashboard has **not been published**, four closing-cash exceptions remain open, and the project's measures have **not yet been bridged fully** to NHS England's consolidated before-impairments-and-transfers balances.
 
 ## Contents
 
@@ -29,6 +29,7 @@ Detailed implementations remain in the stage-specific technical notebooks linked
 
 ### Part III — Findings, Validation and Project Outcomes
 
+- [Verified End-to-End Run](#verified-end-to-end-run--29-october-2026)
 - [Financial Findings and Reconciliation](#financial-findings-and-reconciliation)
 - [Data Quality, Auditability and Limitations](#data-quality-auditability-and-limitations)
 - [Reproducibility and Operational Workflow](#reproducibility-and-operational-workflow)
@@ -207,9 +208,9 @@ The main decisions at this stage are which reporting years to examine, which acc
 
 I designed the ingestion process to retain the original Excel files as the fixed source snapshot and use Python to load the relevant financial records and provider lists into the MySQL Bronze layer. Keeping the raw inputs separate from transformed records provides a reference point when discrepancies appear later in the analysis.
 
-The process also captures the financial year, trust type and source-file context. This is essential because the project combines several annual releases that may not have identical column naming or organisational coverage. Repeatable ingestion is an objective, but full idempotence across all warehouse layers still requires testing.
+The process also captures the financial year, trust type, source filename and SHA-256. This is essential because the project combines several annual releases that do not have identical column naming or organisational coverage. The completed fresh run verified scoped, repeatable loading across all six workbook/year/type combinations.
 
-**Output:** Traceable source records in the Bronze staging area.
+**Verified output:** 4,239,680 Bronze source rows were preserved, including CY, PY and blank amounts. The populated CY population promoted to Silver contained 2,210,974 facts. All six import audit records completed with zero source duplicates, fact-key collisions, ambiguous provider keys, duplicate provider mappings or unmatched populated rows.
 
 **Technical notebook:** [Stage 2 — Data Ingestion](notebook/02-data-ingestion/README.md), including workbook structure, raw tables and Python loading procedure.
 
@@ -219,11 +220,11 @@ The process also captures the financial year, trust type and source-file context
 
 **Purpose.** Make financial records consistent and trustworthy enough to combine across reporting years.
 
-I standardise reporting fields, normalise organisation identifiers and distinguish current-year amounts from comparative figures. I then apply checks for missing information, duplicate financial codes, sign conventions and differences in the provider population. This step is particularly important for NHS financial analysis because a missing provider or misclassified accounting line can alter a national total or the proportion of trusts reporting deficits.
+I standardise reporting fields, normalise organisation identifiers and distinguish current-year amounts from comparative figures. Bronze preserves both CY and PY, while Silver promotion selects populated CY facts. The amount field uses `DECIMAL(18,5)` because the source contains 131,858 genuine fractional £000 values; converting these to integers would discard source precision. I then apply checks for missing information, source and fact-key duplication, provider mapping, sign conventions and differences in the provider population.
 
 Validated information is organised in the Silver layer, where providers and accounting transactions can be analysed across years. Outstanding issues must remain visible in validation results rather than be silently corrected.
 
-**Output:** Standardised, conformed financial records and a traceable validation trail.
+**Verified output:** 215 trust dimension rows and 2,210,974 fact rows. The final automated run recorded 18 passed checks, one non-critical reconciliation warning and zero critical failures in `data/processed/validation_report.csv`.
 
 **Technical notebook:** [Stage 3 — Data Cleaning & Transformation](notebook/03-data-cleaning-and-transformation/README.md), including cleaning routines, Silver promotion and validation checks.
 
@@ -233,11 +234,11 @@ Validated information is organised in the Silver layer, where providers and acco
 
 **Purpose.** Transform accounting records into meaningful financial indicators and comparisons.
 
-The model separates provider information from detailed TAC financial records. SQL views then organise the long-form accounting lines into income, expenditure, workforce, profit-and-loss and balance-sheet measures. This supports year-on-year comparisons, provider benchmarking and analysis of financial pressure without losing the link to the original accounting SubCodes.
+The model separates provider information from detailed TAC financial records. Nine Gold views organise the long-form accounting lines into income, expenditure, workforce, profit-and-loss, balance-sheet, cash-flow, KPI, scorecard and reconciliation outputs. This supports year-on-year comparisons, provider benchmarking and analysis of financial pressure without losing the link to the original accounting SubCodes.
 
 I treat **operating surplus**, **net surplus** and NHS England's published **surplus/deficit before impairments and transfers** as distinct measures. That distinction became especially important when the initial portfolio figures did not align with the official published financial balances. EBITDA and other RAG labels are analytical aids, not automatic NHS regulatory ratings.
 
-**Output:** Analytical views and financial KPIs with explicit definitions and outstanding reconciliation checks.
+**Verified output:** All nine views deployed successfully on MySQL 9.5. All 633 trust-years contain SoCI, SoFP and SoCF records. SoCI, SoFP and SoCF internal residuals are within £1k; four SoFP-to-SoCF closing-cash exceptions exceed £1k and remain unresolved.
 
 **Technical notebook:** [Stage 4 — Data Modelling & Analytics](notebook/04-data-modelling-and-analytics/README.md), including the star schema, SQL view definitions, KPI logic and diagnostic queries.
 
@@ -247,11 +248,11 @@ I treat **operating surplus**, **net surplus** and NHS England's published **sur
 
 **Purpose.** Prepare consistent datasets for a business intelligence report.
 
-I separate reporting preparation from analytical calculation so that Power BI consumes clearly defined financial tables rather than reproducing complex and potentially inconsistent SQL logic. The Gold analytical outputs are prepared as curated CSV exports, including provider information, annual financial summaries, expenditure categories and workforce measures.
+I separate reporting preparation from analytical calculation so that Power BI consumes clearly defined financial tables rather than reproducing complex and potentially inconsistent SQL logic. The Gold analytical outputs are prepared as curated CSV exports, including provider information, annual financial summaries, expenditure categories, workforce, all three principal statements and reconciliation diagnostics.
 
 Before loading these files into the reporting model, the exported totals, provider-year grain, relationship keys and units must be checked against the database. This is necessary to avoid inflating amounts when different fact tables are joined or accidentally aggregating percentage measures.
 
-**Output:** Reporting-ready datasets, subject to a verified fresh export and reconciliation.
+**Verified output:** Thirteen canonical files were regenerated in `data/processed/powerbi_export/`, including 633-row profit-and-loss, balance-sheet, cash-flow and statement-reconciliation files. Nine enriched analytical files were written separately to `data/processed/transformed/` so transformation and reporting scripts cannot overwrite one another.
 
 **Technical notebook:** [Stage 5 — Data Preparation for Reporting](notebook/05-data-preparation-for-reporting/README.md), including export files, grain and Power BI data-model preparation.
 
@@ -272,6 +273,54 @@ The dashboard is **not yet published**. Its final results should be produced onl
 ---
 
 # PART III — FINDINGS, VALIDATION AND PROJECT OUTCOMES
+
+## Verified End-to-End Run — 29 October 2026
+
+The revised pipeline was executed from source workbook to reporting export against a fresh local MySQL
+9.5 environment using Python 3.14. Before rebuilding, the previous three project databases were archived
+to a completed 706 MB SQL dump. MySQL 9 requires `--commands` when a batch script uses the client-side
+`SOURCE` command:
+
+```bash
+mysql --commands -u root -p < sql/schema/create_tables_mysql.sql
+```
+
+The operational sequence then completed successfully:
+
+```bash
+python python/ingestion/load_tac_data.py
+python python/transformation/validate_tac_data.py
+python python/transformation/transform_tac_data.py
+python python/reporting/export_for_powerbi.py
+```
+
+| Control point | Verified result |
+|---|---:|
+| Production source workbooks | 6 |
+| Bronze source rows | 4,239,680 |
+| Populated CY facts | 2,210,974 |
+| Trust dimension rows | 215 |
+| Trust/year analytical rows | 633 |
+| Gold analytical views | 9 |
+| Automated validation | 18 passed, 1 warning, 0 critical |
+| Canonical Power BI exports | 13 |
+| Enriched transformation outputs | 9 |
+| Regression tests | 8 passed |
+
+All source duplicate, fact-key collision, provider ambiguity, provider duplication and unmatched-provider
+counts were zero. The single validation warning represents four SoFP-to-SoCF closing-cash residuals above
+£1k; it is an accounting exception, not a pipeline failure.
+
+| Provider/year exception | Closing-cash residual (£000) |
+|---|---:|
+| Cambridge University Hospitals NHS Foundation Trust — 2021/22 | 134.65240 |
+| Royal Cornwall Hospitals NHS Trust — 2022/23 | 3.00000 |
+| Royal Cornwall Hospitals NHS Trust — 2023/24 | 5.00000 |
+| Tees, Esk and Wear Valleys NHS Foundation Trust — 2023/24 | 269.99410 |
+
+The source-to-report implementation can therefore be described as technically reproduced. The broader
+accounting bridge to NHS England's published before-impairments-and-transfers balance and these four cash
+exceptions remain open and must not be described as reconciled.
 
 ## Financial Findings and Reconciliation
 
@@ -329,12 +378,13 @@ No number should be changed solely to match an external benchmark. Unresolved di
 | The official-balance measure is not yet reconciled to project-generated outputs | Published and model-derived figures must not be combined as if equivalent | Open |
 | Operating-based `is_deficit` differs from official before-impairments-and-transfers classification | Incorrect comparison of deficit counts | Open |
 | Provider population may be filtered by positive income or altered by source coverage | Year-on-year denominators may not match NHS England | Open |
-| `MAX(CASE...)` pivots need duplicate-key verification | May mask source duplication or incorrect record selection | Open |
-| Validation and reporting/export Python scripts still include hard-coded MySQL credentials | Security exposure; inconsistent environment setup | Open |
-| Local source files and populated database were unavailable for a fresh independent run in this review | Results cannot be marked fully reproduced | Open |
+| Source duplicates and provider mappings require verification on every load | May mask source duplication or exclude providers | Automated pre-write gate passed for all six workbooks in the fresh database run |
+| Database credentials must not be embedded in scripts | Security exposure | Environment-based configuration implemented; rotate any previously exposed password |
+| Fresh populated-database run | Required for reproducibility | Completed for all six workbooks: 2,210,974 fact rows, 215 trusts, and all source-integrity gates passed |
+| Four SoFP-to-SoCF closing-cash exceptions exceed £1k | Closing cash is not fully reconciled for those trust-years | Open; exported and recorded as a non-critical validation warning |
 | Dashboard is not published | No user-facing interactive report to validate | Open |
 
-**Credential guidance:** `load_tac_data.py` now expects an environment-supplied `DB_PASSWORD`, but `python/transformation/validate_tac_data.py` and `python/reporting/export_for_powerbi.py` still need the same refactor. Never commit real passwords; rotate a password that has already been exposed in Git history. Changes to application code and history must be handled separately and reviewed.
+**Credential guidance:** all database scripts require an environment-supplied `DB_PASSWORD`; user, host and port also support environment overrides. Never commit real passwords, and rotate any password previously exposed in Git history.
 
 ### Meaning of validation in this project
 
@@ -371,10 +421,11 @@ Illustrative entry points:
 # Check the SQL schema creation and migration instructions before loading.
 python python/ingestion/load_tac_data.py
 python python/transformation/validate_tac_data.py
+python python/transformation/transform_tac_data.py
 python python/reporting/export_for_powerbi.py
 ```
 
-This is **not a complete one-command reproducibility guarantee**: the SQL schema, views, source files, local environment and unresolved credential inconsistencies must be addressed first. Do not run the last two scripts with historical hard-coded passwords; refactor them to environment variables and rotate exposed credentials.
+The revised schema, source-integrity controls and canonical view deployment completed a fresh MySQL integration run: 2,210,974 facts, 215 trusts and 633 trust-years. Reproduction still requires the six local source workbooks, MySQL and environment-supplied credentials; rotate exposed historical credentials.
 
 The SQL views under `sql/views/` and schema scripts under `sql/schema/` must be applied in dependency order. The extensive `create_tables_mysql.sql` includes database objects and must be reviewed for destructive `DROP` operations before running against any valued database. The project should eventually offer a versioned setup script and automated integration test that confirm schema, ingestion, uniqueness, financial mapping, export consistency and replay behaviour.
 
@@ -389,22 +440,21 @@ A reproducible run should archive checksums of six TAC inputs, schema/script rev
 | Deliverable | Repository evidence | Status |
 | --- | --- | --- |
 | Source discovery and file conventions | Stage 1–2 notes, ingestion script | Documented; source snapshot not bundled |
-| Python data ingestion and transformation | `python/ingestion/`, `python/transformation/` | Code exists; fresh run not verified |
-| Bronze/Silver/Gold MySQL architecture | `sql/schema/`, `sql/views/` | Code exists; end-to-end database validation pending |
+| Python data ingestion and transformation | `python/ingestion/`, `python/transformation/` | Fresh run completed: six files loaded and nine enriched outputs generated |
+| Bronze/Silver/Gold MySQL architecture | `sql/schema/`, `sql/views/` | End-to-end database validation completed; 18 checks passed and one non-critical reconciliation warning remains |
 | Financial analytical SQL and KPIs | `sql/analysis/`, `v_kpis.sql` | Implemented definitions; accounting sign-off pending |
 | Financial reconciliation workpaper | [Reconciliation report](reports/nhs_financial_reconciliation.md) | Preliminary; final numerical bridge pending |
-| Curated export process | [Power BI export script](python/reporting/export_for_powerbi.py) | Implemented; current export run not verified |
+| Curated export process | [Power BI export script](python/reporting/export_for_powerbi.py) | Verified: thirteen current exports, including cash flow and statement reconciliation |
 | Power BI modelling and DAX design | `power_bi/` | Design assets provided; published dashboard pending |
-| Full reproducible validated case study | Source-to-report run, reconciled results, verified dashboard | Outstanding |
+| Full reproducible validated case study | Source-to-report run, reconciled results, verified dashboard | Technical source-to-report run complete; accounting bridge and published dashboard outstanding |
 
 ### Recommended order of completion
 
-1. Remove remaining embedded credentials and standardise database configuration.
-2. Reconcile source provider populations, TAC accounting codes and national financial balances.
-3. Execute automated validation and fresh end-to-end pipeline runs, including duplicate/reload tests.
-4. Recalculate financial analysis and amend the detailed [2023/24 review](reports/nhs_sector_financial_review_2324.md) where required.
-5. Produce and test a genuine Power BI report with reconciled values, then add screenshots and publication details.
-6. Update the concise [README](README.md) with the final independently validated findings.
+1. Investigate and explain the four SoFP-to-SoCF closing-cash exceptions.
+2. Complete the bridge from TAC measures to NHS England's official before-impairments-and-transfers balances.
+3. Recalculate financial analysis and amend the detailed [2023/24 review](reports/nhs_sector_financial_review_2324.md) where required.
+4. Produce and test a genuine Power BI report with reconciled values, then add screenshots and publication details.
+5. Update the concise [README](README.md) with the final independently validated findings.
 
 ### What the project demonstrates
 

@@ -3,7 +3,7 @@
 **Implementation:** MySQL Silver star schema and Gold SQL reporting views / KPI calculations.
 
 > `nhs_silver` — populated by the same script's `promote_to_fact()` and `populate_dim_trust()`. `nhs_gold`
-> — seven SQL views pivoted on top of it. This is where raw, EAV-shaped staging data becomes a conformed
+> — nine SQL views pivoted on top of it. This is where raw, EAV-shaped staging data becomes a conformed
 > star schema, and where KPI-ready output actually gets computed. Silver and Gold are separate databases
 > (see [stage ③](../03-data-cleaning-and-transformation/README.md)), so every Gold view fully-qualifies its Silver source tables:
 > `FROM nhs_silver.fct_tac`, `JOIN nhs_silver.dim_trust`, etc.
@@ -35,9 +35,28 @@ A zero residual supports internal agreement **only if all required inputs and re
 
 ### Deployment order and review
 
-Run or refresh the SoCI and SoFP Gold views, then `v_cash_flow.sql`, then `v_statement_reconciliation.sql`. Check trust/year uniqueness and statement coverage before analysing residuals. Cross-year comparisons and ratios require consistent denominators and confirmed sign conventions.
+Run [`sql/schema/deploy_gold_views.sql`](../../sql/schema/deploy_gold_views.sql) from the repository root
+with `mysql --commands -u root -p < sql/schema/deploy_gold_views.sql`. MySQL 9 disables client commands
+such as `SOURCE` in batch mode unless `--commands` is supplied. The script applies every canonical view
+in dependency order, ending with
+`v_statement_reconciliation`. Check trust/year uniqueness and statement coverage before analysing
+residuals. Cross-year comparisons and ratios require consistent denominators and confirmed sign
+conventions.
 
-The new SQL views have not been executed against a populated MySQL database in this change. The original historical reconciliation remains preliminary: [financial reconciliation workpaper](../../reports/nhs_financial_reconciliation.md).
+The SQL views were executed against the freshly populated MySQL database for all 633 trust-years. SoCI,
+SoFP and SoCF residuals are within £1k; four SoFP-to-SoCF closing-cash exceptions exceed £1k, with a
+maximum of £269.9941k. The accounting interpretation therefore remains preliminary pending resolution of
+those exceptions: [financial reconciliation workpaper](../../reports/nhs_financial_reconciliation.md).
+
+| Provider/year exception | Closing-cash residual (£000) |
+|---|---:|
+| Cambridge University Hospitals NHS Foundation Trust — 2021/22 | 134.65240 |
+| Royal Cornwall Hospitals NHS Trust — 2022/23 | 3.00000 |
+| Royal Cornwall Hospitals NHS Trust — 2023/24 | 5.00000 |
+| Tees, Esk and Wear Valleys NHS Foundation Trust — 2023/24 | 269.99410 |
+
+These values are diagnostic differences, not adjustments. They remain unchanged until their source or
+accounting cause is evidenced.
 
 ---
 
@@ -72,16 +91,16 @@ This overwrites rather than versions — a Type 1 SCD, not Type 2. Two deliberat
 SELECT p.org_code, r.*
 FROM stg_tac_raw r
 JOIN stg_provider_list p
-    ON  r.organisation_name = p.organisation_name
+    ON  r.provider_name_key = p.provider_name_key
    AND  r.financial_year    = p.financial_year
    AND  r.trust_type        = p.trust_type
 WHERE r.financial_year = :fy AND r.trust_type = :tt
 ```
 
-The join is on three columns to uniquely match a name within the same year and file type. Any name in
-`stg_tac_raw` that doesn't match `stg_provider_list` is silently dropped here — which is exactly what
-[stage ③](../03-data-cleaning-and-transformation/README.md)'s `validate()` warning about unmatched names is telling you will
-happen.
+The deterministic `provider_name_key` normalises case, punctuation and whitespace, then applies two
+reviewed historical aliases. It is still constrained to the same year and file type. Before any database
+write, `validate()` now fails the file if a populated current-year row is unmatched or if one key maps to
+multiple ODS codes, so the promotion join cannot silently lose source facts.
 
 **Step B — a self-healing step most walkthroughs of this pipeline miss:** before the join runs, every
 distinct `worksheet_name` present in this file's staging rows is guaranteed to exist in `dim_worksheet`:
@@ -104,7 +123,7 @@ calling out on its own: a dimension table doesn't have to be perfectly pre-seede
 foreign key against, provided the promotion step is prepared to extend it — worth keeping even now that the
 seed list is complete, in case NHS England adds a schedule in a future year's file.
 
-**Step C — UPSERT into `fct_tac`, chunked:**
+**Step C — atomically replace the current source scope, then UPSERT in chunks:**
 
 ```python
 for start in range(0, len(fact_df), 1000):
@@ -114,28 +133,30 @@ for start in range(0, len(fact_df), 1000):
 
 ```sql
 INSERT INTO fct_tac (org_code, financial_year, worksheet_name, table_id,
-                      main_code, sub_code, total_000s, trust_type, source_file)
+                      main_code, sub_code, total_000s, trust_type, source_file, source_sha256)
 VALUES (...)
 ON DUPLICATE KEY UPDATE
     total_000s  = VALUES(total_000s),
-    source_file = VALUES(source_file),
+    source_file   = VALUES(source_file),
+    source_sha256 = VALUES(source_sha256),
     load_ts     = CURRENT_TIMESTAMP;
 ```
 
 Chunked because `to_sql()` — used for the simpler staging load — doesn't support
 `ON DUPLICATE KEY UPDATE`; this uses parameterised SQL instead.
 
-**Why UPSERT, not staging's delete-and-reload?** `fct_tac` and `dim_trust` aren't disposable per file —
-they're the *accumulation* of all six files. A truncate-and-reload triggered by loading file 2 would wipe
-out file 1's rows. The fix is a unique key that identifies "the same financial line item" regardless of
-which run loaded it, so each file can only ever add or refresh its own rows:
+**Why scoped replacement plus UPSERT?** `fct_tac` accumulates all six files, so a table-wide truncate would
+erase other years and trust types. An UPSERT alone, however, cannot remove stale facts that disappeared
+from a corrected workbook. The pipeline therefore opens one transaction, deletes only the current
+`(financial_year, trust_type)` scope, and inserts the freshly validated rows. The unique key remains a
+second idempotency guard:
 
 ```sql
 UNIQUE KEY uq_tac (org_code, financial_year, main_code, sub_code)
 ```
 
 Running the pipeline twice against the same file leaves `fct_tac` and `dim_trust` with identical row
-counts both times.
+counts, while `source_sha256` records the exact workbook content used.
 
 ---
 
@@ -153,7 +174,7 @@ rows** — every SubCode across all 31 real TAC worksheets, generated by
 [stage ①](../01-data-sourcing/README.md)) rather than the 59 hand-curated rows the project started with —
 a direct FK from `fct_tac.sub_code` would still be one NHS England schema revision away from blocking a
 load, so the design stays the same on principle: `dim_subcode` carries the FK into `dim_worksheet` instead,
-so the schedule-level relationship is enforced one join away, on a table 2.18 million rows smaller.
+so the schedule-level relationship is enforced one join away, on a table 2.21 million rows smaller.
 
 ```sql
 CREATE TABLE fct_tac (
@@ -164,9 +185,10 @@ CREATE TABLE fct_tac (
     table_id        SMALLINT      NOT NULL,
     main_code       VARCHAR(20)   NOT NULL,
     sub_code        VARCHAR(20)   NOT NULL,
-    total_000s      DECIMAL(14,0) NOT NULL,
+    total_000s      DECIMAL(18,5) NOT NULL,
     trust_type      VARCHAR(20)   NOT NULL,
     source_file     VARCHAR(200)  NOT NULL,
+    source_sha256   CHAR(64)      NOT NULL,
     load_ts         TIMESTAMP     DEFAULT CURRENT_TIMESTAMP,
     UNIQUE KEY uq_tac (org_code, financial_year, main_code, sub_code),
     INDEX idx_fct_org_year  (org_code, financial_year),
@@ -205,10 +227,10 @@ SubCode list — tag once in the dimension, every view benefits. `is_subtotal` f
 
 ---
 
-## Analytics Layer — The Five SQL Views
+## Analytics Layer — The Nine SQL Views
 
-`fct_tac` is correct once loaded, but it's still 2.18 million individual SubCode rows — not something a
-dashboard can chart. Seven `nhs_gold` views pivot it into trust-level, year-level tables — each
+`fct_tac` is correct once loaded, but it still contains 2,210,974 individual SubCode rows — not something a
+dashboard can chart. Nine `nhs_gold` views pivot it into trust-level, year-level tables — each
 fully-qualifying its `nhs_silver` source tables, since Gold and Silver are separate databases.
 
 **`v_income_expenditure`** — pivots TAC02 SoCI SubCodes into an I&E summary row per trust per year:
@@ -255,6 +277,13 @@ stores correctly-signed values in the raw data (liabilities negative), so the pi
 `fct_tac` (`promote_to_fact()` never filtered by worksheet), so this view is a pure additive job — no
 ingestion change was needed to build it.
 
+**`v_cash_flow`** — the statutory TAC05 SoCF summary: operating, investing and financing cash flows,
+reported net cash movement, opening cash, closing cash and relevant transfer lines.
+
+**`v_statement_reconciliation`** — a union-spine diagnostic view that retains a trust/year even if one
+statement is absent. It exposes `has_soci`, `has_sofp`, `has_socf` and four nullable residuals; missing
+inputs never become false zero passes.
+
 **`v_trust_annual_scorecard`** — a wide, one-row-per-trust-per-year view combining `v_income_expenditure`,
 `v_expenditure_breakdown`, `v_workforce`, and `v_kpis`, built for DirectQuery and ad-hoc SQL (see
 `sql/analysis/`), not the CSV export — the export in [stage ⑤](../05-data-preparation-for-reporting/README.md) queries the
@@ -266,12 +295,13 @@ narrower views (including `v_profit_and_loss`/`v_balance_sheet`) separately inst
 
 | Concept | Design Decision | Why |
 |---------|------------------|-----|
-| `ON DUPLICATE KEY UPDATE` on `fct_tac` / `dim_trust` | UPSERT, not delete-and-reload | Both tables accumulate across all six files |
+| Scoped fact replacement plus UPSERT | Delete only the current `(financial_year, trust_type)` inside one transaction | Removes stale facts without touching the other five source scopes |
 | Self-healing `dim_worksheet` | `INSERT IGNORE` before the join | The FK must never block a row for an under-seeded dimension — now a safety net, not a crutch |
 | No FK from `fct_tac` to `dim_subcode` | Even at 1,000 seeded rows, a future NHS England schema change could still add an unseeded code | Enforced one join away instead, on a much smaller table |
 | `MAX(CASE WHEN sub_code = ... )` pivot idiom | Every `v_*` view, including `v_profit_and_loss`/`v_balance_sheet` | Turns EAV rows into named columns without changing the fact table |
 | `analytics_category` on `dim_subcode` | Tag once, every view benefits | Avoids hardcoded SubCode lists inside view SQL |
 | Gold views fully-qualify Silver tables | `FROM nhs_silver.fct_tac`, not bare `fct_tac` | `nhs_gold` and `nhs_silver` are separate databases |
+| Reconciliation tolerance | Flag absolute residuals above £1k | Allows sub-£1k source rounding while retaining material exceptions |
 
 ---
 

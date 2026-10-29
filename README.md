@@ -8,7 +8,7 @@ This project was motivated by a need to understand the growing financial pressur
 
 **What the published accounts show:** NHS England reported a £562 million surplus in 2021/22, a £457 million deficit in 2022/23 and a £2.312 billion deficit in 2023/24, measured before impairments and transfers. The proportion of providers reporting a deficit increased from about 34% to 64%. These figures show a worsening financial position but do not, on their own, identify the cause.
 
-**How I investigated it:** I used NHS England's published Trust Accounts Consolidation data for three financial years, processed and standardised the source records with Python, and developed MySQL analytical views and financial measures for cross-year and trust-level comparison. The project also includes a Power BI reporting model; the dashboard itself is pending publication.
+**How I investigated it:** I used NHS England's published Trust Accounts Consolidation data for three financial years, processed and standardised the source records with Python, and developed MySQL analytical views and financial measures for cross-year and trust-level comparison. The completed fresh run loaded 2,210,974 facts for 215 trusts, produced 633 trust-year analytical rows and regenerated thirteen reporting exports. The project also includes a Power BI reporting model; the dashboard itself is pending publication.
 
 [Explore the full project methodology and documentation](PROJECT_DOCUMENTATION.md).
 
@@ -32,7 +32,7 @@ This project was motivated by a need to understand the growing financial pressur
 
 **Why it matters:** The figures reveal a widening financial sustainability challenge and make it important to investigate which providers and spending categories face the greatest pressure. They do not, by themselves, establish a single cause of the deterioration.
 
-**Basis and limitations:** The figures above come from NHS England's official consolidated provider accounts, not a fresh execution of this project's SQL. The project's existing TAC-derived operating measure (subcode `SCI0140A`) is different and still needs reconciliation against source data before being reported as validated. The supporting project documentation and financial review have not yet been reconciled.
+**Basis and limitations:** The figures above come from NHS England's official consolidated provider accounts, not the project's SQL measure. The project pipeline has now been freshly executed and its source, grain, provider mapping and three-statement controls validated. However, the TAC-derived operating measure (`SCI0140A`) is different from the official before-impairments-and-transfers balance and still requires a like-for-like accounting bridge. Four SoFP-to-SoCF closing-cash exceptions above £1k also remain open.
 
 The 2023/24 deficit includes a £1.094 billion impact from changes in the accounting treatment of PFI liabilities under IFRS 16, affecting comparability.
 
@@ -55,6 +55,15 @@ The report design covers an executive summary, income and expenditure, cost pres
 ![NHS Trust financial analytics data engineering architecture](docs/images/data_engineering_architecture.svg)
 
 The six stages are Data Sourcing, Data Ingestion, Data Cleaning & Transformation, Data Modelling & Analytics, Data Preparation for Reporting, and Data Visualisation & Insights. The implementation uses MySQL Bronze, Silver and Gold layers. The Power BI dashboard remains pending publication. The detailed schema, data checks, source mapping and implementation choices are explained in [Project Documentation](PROJECT_DOCUMENTATION.md).
+
+### Verified pipeline status — 29 October 2026
+
+- Six production TAC workbooks loaded from exact SHA-256-tracked source files.
+- 4,239,680 Bronze rows and 2,210,974 populated CY Silver facts.
+- 18 automated validation checks passed; one non-critical closing-cash warning remains.
+- All 633 trust-years contain SoCI, SoFP and SoCF records.
+- Thirteen canonical Power BI CSVs and nine separate enriched outputs generated.
+- Eight regression tests passing.
 
 ## Documentation and reproducibility
 

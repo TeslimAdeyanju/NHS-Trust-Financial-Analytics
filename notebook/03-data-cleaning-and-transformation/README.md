@@ -23,7 +23,10 @@ The TAC illustrative reporting template distinguishes three core statements: **T
 7. **Provider population:** Match ODS identifiers and confirm changes in the published annual population rather than presuming a constant provider count.
 8. **Reconciliation:** After Gold views are created, evaluate `sql/views/v_statement_reconciliation.sql` and investigate non-zero residuals and nulls.
 
-**Limitation:** The current pipeline has not yet been executed end-to-end against the uploaded illustrative template. These are documented validation requirements, not evidence of passing checks.
+These controls were exercised in the fresh six-workbook run. Every source gate passed with zero duplicate
+source rows, zero proposed fact-key collisions, zero duplicate or ambiguous provider mappings and zero
+unmatched populated CY rows. The illustrative workbook remains reference metadata rather than a fact
+source and is intentionally excluded from ingestion.
 
 Related implementation: [TAC schema](../../sql/schema/create_tables_mysql.sql), [validation script](../../python/transformation/validate_tac_data.py), [reconciliation SQL](../../sql/views/v_statement_reconciliation.sql).
 
@@ -69,7 +72,7 @@ df = pd.read_excel(path, sheet_name=sheet_name, header=0, dtype={
     "MainCode":         str,
     "RowNumber":        "Int64",
     "SubCode":          str,
-    "Total":            float,     # float first — NaN-safe, cast to int later
+    "Total":            float,     # NaN-safe; rounded to five source decimals later
 })
 ```
 
@@ -84,30 +87,30 @@ col_map = {
 df = df.rename(columns=col_map)
 ```
 
-**Step C — Drop null rows, strip strings:**
+**Step C — Require identifying fields, preserve blank amounts, and strip strings:**
 
 ```python
-df = df.dropna(subset=["organisation_name", "sub_code", "total"])
+df = df.dropna(subset=["organisation_name", "worksheet_name", "main_code", "sub_code"])
 df["organisation_name"] = df["organisation_name"].astype(str).str.strip()
 ```
 
-**Step D — Filter CY only** (halves the row count):
+**Step D — Classify CY/PY without discarding either from Bronze:**
 
 ```python
 def infer_year_type(main_code: str) -> str:
     return "PY" if "PY" in str(main_code) else "CY"
 
 df["year_type"] = df["main_code"].apply(infer_year_type)
-df = df[df["year_type"] == "CY"].copy()
-# NHS Trusts file:         ~481K → ~241K rows
-# Foundation Trusts file: ~1.1M → ~550K rows
+# Silver promotion later selects year_type = "CY".
 ```
 
 **Step E — Cast `Total`, attach filename-derived metadata:**
 
 ```python
-df["total"]          = pd.to_numeric(df["total"], errors="coerce").fillna(0).astype("int64")
+df["total"]          = pd.to_numeric(df["total"], errors="coerce").round(5)
+df["provider_name_key"] = df["organisation_name"].map(provider_name_key)
 df["source_file"]    = source_file
+df["source_sha256"]  = source_sha256
 df["trust_type"]     = trust_type
 df["financial_year"] = financial_year
 ```
@@ -116,13 +119,16 @@ df["financial_year"] = financial_year
 
 ## `validate()` — Stop Before Writing Bad Data
 
-Two severity levels, three checks:
+The source gate runs before any staging or fact write:
 
 | Check | Severity | Reason |
 |-------|----------|--------|
-| Null in a critical column (`organisation_name`, `sub_code`, `total`, `financial_year`) | CRITICAL — halts the load, raises before any write | A null `sub_code` means the row has no identity |
-| Duplicate `(organisation_name, main_code, sub_code)` rows | WARNING — logs, continues | The UPSERT in stage ④ handles duplicates anyway |
-| Organisation name not found in the provider list | WARNING — logs, continues | Those rows won't resolve an ODS code and are dropped at the stage ④ join |
+| Null in an identifying field | CRITICAL — halts the load | The source row cannot be traced safely |
+| Duplicate full source-grain rows | CRITICAL — halts the load | An upsert must not conceal source duplication |
+| Duplicate proposed fact-key rows | CRITICAL — halts the load | Two source lines must not collide at the Silver unique key |
+| Duplicate provider lookup rows | CRITICAL — halts the load | The provider join must remain one-to-one |
+| Normalised provider key maps to multiple ODS codes | CRITICAL — halts the load | The mapping is ambiguous |
+| Populated CY row has no provider mapping | CRITICAL — halts the load | Financial rows must never disappear at the ODS join |
 
 **Rule:** halt on problems that cannot be recovered from downstream; warn on problems that can.
 
@@ -159,8 +165,10 @@ CREATE TABLE stg_tac_raw (
     main_code         VARCHAR(20)     NOT NULL,
     row_num           SMALLINT        NOT NULL,
     sub_code          VARCHAR(20)     NOT NULL,
-    total             DECIMAL(14,0)   NOT NULL,   -- £000s
+    total             DECIMAL(18,5),              -- £000s; preserves fractional source values and blanks
+    provider_name_key VARCHAR(300)    NOT NULL,
     source_file       VARCHAR(200)    NOT NULL,
+    source_sha256     CHAR(64)        NOT NULL,
     trust_type        VARCHAR(20)     NOT NULL,
     financial_year    CHAR(7)         NOT NULL,
     year_type         CHAR(2)         NOT NULL,   -- CY | PY
@@ -171,13 +179,13 @@ CREATE TABLE stg_tac_raw (
 ) ENGINE=InnoDB;
 ```
 
-- Uses `organisation_name`, not `org_code` — this is raw data, names not yet resolved to a stable key
-- No `UNIQUE KEY` — staging accepts duplicate rows; deduplication happens at promotion, in stage ④
+- Retains the published name and a deterministic normalised key; ODS resolution happens at promotion
+- No `UNIQUE KEY` — staging preserves source evidence, but validation rejects duplicates before writing
 - `INDEX (organisation_name(100), ...)` — MySQL requires a prefix length on an index over a long `VARCHAR`
 
-`stg_provider_list` is the same idea for the "List of Providers" sheet — a temporary, per-file lookup
-(~639 rows across all six files combined) that stage ④'s join uses to resolve `organisation_name →
-org_code`. Once that join runs, its job is done for that file. It carries a `trust_type` column
+`stg_provider_list` is the same idea for the "List of Providers" sheet — a per-file lookup that resolves
+the normalised provider key to `org_code`. Punctuation and case differences are normalised; genuine name
+changes use a small reviewed alias map. Fuzzy matching is not used. It carries a `trust_type` column
 (`NHS_TRUST` | `FOUNDATION_TRUST`) alongside `financial_year`, so the join in stage ④ can match a name
 within the same year *and* file type.
 
@@ -188,11 +196,30 @@ within the same year *and* file type.
 | Concept | Design Decision | Why |
 |---------|------------------|-----|
 | Three databases | `nhs_bronze` buffer + `nhs_silver` conformed + `nhs_gold` views | Separates raw, clean, and curated; staging is safe to reload |
-| `float` dtype for `Total` | NaN-safe read, cast to `int64` after filtering | `NaN` cannot exist in an integer column |
-| CY filter | Drop rows where `main_code` contains `"PY"` | Prevents double-counting across six files |
+| `float` dtype for `Total` | NaN-safe read, then round to five decimals | Preserves 131,858 genuine fractional £000 amounts |
+| CY/PY classification | Preserve both in Bronze; promote populated CY rows only | Retains source evidence while preventing double-counting in Silver |
 | Validate before write | Critical → halt; Warning → log and continue | Catch unrecoverable problems before any row lands |
 | DELETE + INSERT in staging | Scoped to `(financial_year, trust_type)` | Idempotent reloads without touching other files' rows |
 | No FK, no UNIQUE KEY on `stg_tac_raw` | Staging accepts anything NHS England published | Integrity is enforced one stage later, in `fct_tac` |
+
+## Verified validation results — 29 October 2026
+
+The completed run produced 2,210,974 Silver facts and 215 trust dimension rows. The post-load validation
+report recorded **18 passed checks, one non-critical warning and zero critical failures**:
+
+- all three expected financial years were present;
+- no null organisation codes, duplicate fact keys or orphan provider codes were found;
+- 2023/24 total income was £129.2bn;
+- 124 trusts met the project's operating-deficit definition in 2023/24;
+- average 2023/24 EBITDA margin was 3.6%;
+- average acute-sector pay-to-income was 64.9%;
+- all 633 trust-years contained SoCI, SoFP and SoCF records;
+- SoCI, SoFP and SoCF internal residuals were within £1k;
+- four SoFP-to-SoCF closing-cash differences exceeded £1k and remain visible as a warning.
+
+The machine-readable result is written to `data/processed/validation_report.csv`. A passed rule confirms
+that rule only; it does not replace the outstanding bridge to NHS England's official
+before-impairments-and-transfers measure.
 
 ---
 
@@ -202,7 +229,7 @@ within the same year *and* file type.
 |------|-------------|
 | [python/ingestion/load_tac_data.py](../../python/ingestion/load_tac_data.py) | `read_provider_list()`, `read_all_data()`, `validate()`, `load_staging()` |
 | [sql/schema/create_tables_mysql.sql](../../sql/schema/create_tables_mysql.sql) | `stg_tac_raw` and `stg_provider_list` DDL |
-| [python/CLAUDE.md](../../python/CLAUDE.md) | Pandas patterns, hardcoded-connection rationale, validation pattern |
+| [python/CLAUDE.md](../../python/CLAUDE.md) | Pandas patterns, environment-based connection configuration, validation pattern |
 | [PROJECT_DOCUMENTATION.md](../../PROJECT_DOCUMENTATION.md), stage ③ | The narrative version, plus the client/server MySQL diagram |
 
 ---

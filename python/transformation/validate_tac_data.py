@@ -14,13 +14,15 @@ Usage:
 """
 
 import logging
+import os
 import sys
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pandas as pd
 from sqlalchemy import create_engine, text
+from sqlalchemy.engine import URL
 
 logging.basicConfig(
     level=logging.INFO,
@@ -31,10 +33,10 @@ log = logging.getLogger(__name__)
 
 # ── Config ──────────────────────────────────────────────────────────────────
 
-DB_USER     = "root"
-DB_PASSWORD = "Password1234"
-DB_HOST     = "127.0.0.1"
-DB_PORT     = 3306
+DB_USER     = os.getenv("DB_USER", "root")
+DB_PASSWORD = os.getenv("DB_PASSWORD")
+DB_HOST     = os.getenv("DB_HOST", "127.0.0.1")
+DB_PORT     = int(os.getenv("DB_PORT", "3306"))
 SILVER_DB   = "nhs_silver"   # row-level checks connect here; view-level checks qualify nhs_gold.*
 
 REPORT_PATH = Path("data/processed/validation_report.csv")
@@ -60,7 +62,7 @@ class ValidationResult:
     severity: str           # CRITICAL | WARNING | INFO
     passed: bool
     detail: str
-    run_ts: str = field(default_factory=lambda: datetime.utcnow().isoformat())
+    run_ts: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
 
 
 results: list[ValidationResult] = []
@@ -260,6 +262,52 @@ def check_orphan_fact_rows(conn) -> None:
     )
 
 
+def check_statement_reconciliation(conn) -> None:
+    """Check statement coverage and residuals without treating missing values as zero."""
+    coverage = conn.execute(text("""
+        SELECT
+            COUNT(*) AS trust_years,
+            SUM(has_soci = 0) AS missing_soci,
+            SUM(has_sofp = 0) AS missing_sofp,
+            SUM(has_socf = 0) AS missing_socf
+        FROM nhs_gold.v_statement_reconciliation
+    """)).mappings().one()
+    missing = int(coverage["missing_soci"] or 0) + int(coverage["missing_sofp"] or 0) + int(coverage["missing_socf"] or 0)
+    record(
+        "three-statement coverage",
+        "CRITICAL",
+        missing == 0,
+        f"{coverage['trust_years']} trust-years; missing SoCI={coverage['missing_soci'] or 0}, "
+        f"SoFP={coverage['missing_sofp'] or 0}, SoCF={coverage['missing_socf'] or 0}",
+    )
+
+    residual_checks = [
+        ("SoCI operating reconciliation", "soci_operating_residual_000s"),
+        ("SoFP equity reconciliation", "sofp_equity_residual_000s"),
+        ("SoCF cash-movement reconciliation", "socf_cash_movement_residual_000s"),
+        ("SoFP-to-SoCF closing-cash reconciliation", "cash_cross_statement_residual_000s"),
+    ]
+    tolerance_000s = 1
+    for label, column in residual_checks:
+        row = conn.execute(text(f"""
+            SELECT
+                SUM({column} IS NULL) AS missing_values,
+                SUM(ABS({column}) > :tolerance) AS exceptions,
+                MAX(ABS({column})) AS max_abs
+            FROM nhs_gold.v_statement_reconciliation
+        """), {"tolerance": tolerance_000s}).mappings().one()
+        missing_values = int(row["missing_values"] or 0)
+        exceptions = int(row["exceptions"] or 0)
+        max_abs = float(row["max_abs"] or 0)
+        record(
+            label,
+            "WARNING",
+            missing_values == 0 and exceptions == 0,
+            f"{exceptions} residuals exceed £{tolerance_000s}k; "
+            f"{missing_values} missing; maximum absolute residual £{max_abs:.5f}k",
+        )
+
+
 # ── Runner ───────────────────────────────────────────────────────────────────
 
 def run_all_checks(conn) -> None:
@@ -275,6 +323,7 @@ def run_all_checks(conn) -> None:
         check_pay_pct_acute,
         check_income_expenditure_balance,
         check_wte_plausibility,
+        check_statement_reconciliation,
     ]
     for check_fn in checks:
         try:
@@ -291,7 +340,13 @@ def write_report() -> None:
 
 
 def main() -> None:
-    url = f"mysql+pymysql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{SILVER_DB}?charset=utf8mb4"
+    if not DB_PASSWORD:
+        raise RuntimeError("DB_PASSWORD environment variable is required for MySQL access")
+    url = URL.create(
+        drivername="mysql+pymysql", username=DB_USER, password=DB_PASSWORD,
+        host=DB_HOST, port=DB_PORT, database=SILVER_DB,
+        query={"charset": "utf8mb4"},
+    )
     engine = create_engine(url, echo=False)
 
     log.info("=" * 60)

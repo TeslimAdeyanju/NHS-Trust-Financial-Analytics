@@ -2,7 +2,7 @@
 
 **Implementation:** Power BI semantic model, DAX and proposed report pages (publication pending).
 
-> Imports the eleven CSVs from [stage ⑤](../05-data-preparation-for-reporting/README.md) (or connects directly to
+> Imports the thirteen CSVs from [stage ⑤](../05-data-preparation-for-reporting/README.md) (or connects directly to
 > [stage ④](../04-data-modelling-and-analytics/README.md) via DirectQuery), builds the model relationships and DAX
 > measures below, and renders five report pages. This is the only stage a non-technical end user — a
 > finance director, a board — actually interacts with; there is no code to run here, only a model to
@@ -28,15 +28,18 @@ convention Power BI's own model view then displays:
 | `expenditure_detail.csv` | `fact_expenditure_detail` |
 | `profit_and_loss.csv` | `fact_profit_and_loss` |
 | `balance_sheet.csv` | `fact_balance_sheet` |
+| `cash_flow.csv` | `fact_cash_flow` |
+| `statement_reconciliation.csv` | `fact_statement_reconciliation` |
 | `sector_benchmarks.csv` | `fact_sector_benchmarks` |
 
 Plus one table that isn't a CSV at all: **`_Measures`**, created via *Enter Data → blank table*, holding
 none of the data — only DAX measures, so they have a home not tied to any one fact table.
 
-`fact_profit_and_loss` and `fact_balance_sheet` are the two newest tables — the full statutory P&L and
-Balance Sheet from [stage ⑤](../05-data-preparation-for-reporting/README.md) — imported and related the same way as every other
-fact table below. No dedicated report page consumes them yet; that's separate, future work. Until then
-they're available for ad-hoc visuals or drillthrough on the existing pages.
+`fact_profit_and_loss`, `fact_balance_sheet` and `fact_cash_flow` expose the three principal statements.
+`fact_statement_reconciliation` supplies statement-coverage flags and diagnostic residuals. No published
+report page consumes these newer tables yet; until that work is completed they are available for ad-hoc
+visuals, reconciliation review and drillthrough. A visual must not label the statements fully reconciled:
+four closing-cash residuals exceed £1k in the verified run.
 
 ---
 
@@ -54,12 +57,14 @@ fact_income_detail[org_code / financial_year]            → dim_trust / dim_fin
 fact_expenditure_detail[org_code / financial_year]       → dim_trust / dim_financial_year
 fact_profit_and_loss[org_code / financial_year]          → dim_trust / dim_financial_year
 fact_balance_sheet[org_code / financial_year]            → dim_trust / dim_financial_year
+fact_cash_flow[org_code / financial_year]                 → dim_trust / dim_financial_year
+fact_statement_reconciliation[org_code / financial_year] → dim_trust / dim_financial_year
 fact_sector_benchmarks[financial_year]                   → dim_financial_year   (no dim_trust — see below)
 ```
 
 `fact_sector_benchmarks` has no relationship to `dim_trust`: it was built pre-aggregated by
 `(sector, trust_type)` in [stage ⑤](../05-data-preparation-for-reporting/README.md)'s SQL, so it has no `org_code` column to join
-on — `sector` and `trust_type` stay unmodelled attributes on the table itself. Full nine-fact star
+on — `sector` and `trust_type` stay unmodelled attributes on the table itself. The resulting eleven-fact star
 diagram, re-exported from Power BI's own model view, is in `PROJECT_DOCUMENTATION.md`, stage ⑤.
 
 ---

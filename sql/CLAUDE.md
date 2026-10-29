@@ -21,6 +21,7 @@ finance-schema template.
 ```text
 nhs_bronze.stg_tac_raw       # Raw "All data" sheet rows, ~1:1 with source files
 nhs_bronze.stg_provider_list # Raw "List of Providers" sheet rows (name → ODS code lookup)
+nhs_bronze.import_batch      # Source hash, row counts, integrity results and load status
 nhs_silver.dim_*             # dim_trust, dim_financial_year, dim_worksheet, dim_subcode
 nhs_silver.fct_tac           # Single EAV-style fact table — see PROJECT_DOCUMENTATION.md, stage ④
 nhs_gold.v_*                 # Analytical views built on nhs_silver.fct_tac
@@ -98,9 +99,10 @@ worksheet_name      VARCHAR(50)   FK → dim_worksheet
 table_id            SMALLINT
 main_code           VARCHAR(20)
 sub_code            VARCHAR(20)   -- unconstrained by design; joins to dim_subcode
-total_000s          DECIMAL(14,0)
+total_000s          DECIMAL(18,5)  -- TAC contains genuine fractional £000 values
 trust_type          VARCHAR(20)
 source_file         VARCHAR(200)
+source_sha256       CHAR(64)       -- content lineage back to the exact workbook bytes
 UNIQUE KEY uq_tac (org_code, financial_year, main_code, sub_code)
 ```
 
@@ -114,6 +116,9 @@ UPSERT pattern, and why `sub_code` stays unconstrained is in `PROJECT_DOCUMENTAT
   `nhs_silver` — a different database), defined identically in both `create_tables_mysql.sql` and its own
   file under `sql/views/` — the standalone file is canonical if the two ever drift. Views that only
   reference other `nhs_gold` views (`v_kpis`, `v_trust_annual_scorecard`) leave those refs unqualified.
+- `sql/schema/deploy_gold_views.sql` is the canonical ordered deployment entrypoint. The main MySQL schema
+  sources it at the end, so the standalone definitions always overwrite any older embedded copies. Use
+  `mysql --commands` for batch execution because MySQL 9 disables `SOURCE` processing by default.
 - Every view carries `org_code` and `financial_year` (or is explicitly aggregated past trust grain, like
   `v_kpis`'s sector-benchmark rollup)
 - All monetary columns stay in £000s inside SQL — conversion to £m happens only in DAX on import
@@ -127,8 +132,8 @@ UPSERT pattern, and why `sub_code` stays unconstrained is in `PROJECT_DOCUMENTAT
   `v_income_expenditure.sql` and `v_expenditure_breakdown.sql` (and the full-statement versions,
   `v_profit_and_loss.sql` and `v_balance_sheet.sql`)
 - Always alias table names in joins: `fct_tac r JOIN dim_trust t ON ...`
-- `CAST(... AS SIGNED)` on `_000s` columns in any query destined for CSV export, so pandas doesn't read them
-  back as `Decimal`
+- `CAST(... AS DOUBLE)` on numeric columns destined for CSV export, so pandas receives numeric values
+  without truncating the source's five-decimal £000 precision
 
 ## Example View Pattern (real, from `v_income_expenditure.sql`)
 
@@ -152,8 +157,8 @@ GROUP BY org_code, financial_year;
 
 - Do not add a `budget_000s`, `data_type`, or `variance_pct` column anywhere — there is no budget/forecast
   data source in this project; TAC is actuals-only (see top-level `CLAUDE.md`)
-- Do not TRUNCATE `fct_tac` or `dim_trust` — they accumulate across all six source files; only `stg_*`
-  tables are safe to delete-and-reload per file
+- Do not TRUNCATE `fct_tac` or `dim_trust`. Ingestion atomically replaces only the current
+  `(financial_year, trust_type)` staging and fact scope, leaving the other five source scopes intact.
 - Do not add a direct `sub_code` FK on `fct_tac` — that constraint is already correctly enforced one join
   away, on `dim_subcode` (2.18M rows smaller); see the FK write-up in `PROJECT_DOCUMENTATION.md`, stage ④
 - Do not use `SELECT *` in a view definition

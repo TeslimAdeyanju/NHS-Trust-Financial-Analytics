@@ -20,6 +20,8 @@ from pathlib import Path
 import pandas as pd
 from sqlalchemy import create_engine, text
 
+from source_integrity import provider_name_key, sha256_file, source_validation_counts
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s  %(levelname)-8s  %(message)s",
@@ -81,7 +83,9 @@ def infer_year_type(main_code: str) -> str:
 
 # ── Readers ────────────────────────────────────────────────────────────────
 
-def read_provider_list(path: Path, source_file: str, financial_year: str) -> pd.DataFrame:
+def read_provider_list(
+    path: Path, source_file: str, source_sha256: str, financial_year: str
+) -> pd.DataFrame:
     log.info("  Reading provider list...")
     df = pd.read_excel(path, sheet_name="List of Providers", header=0)
     df = df.rename(columns={
@@ -100,12 +104,17 @@ def read_provider_list(path: Path, source_file: str, financial_year: str) -> pd.
     keep = ["organisation_name", "org_code", "region", "sector", "comments"]
     df = df[[c for c in keep if c in df.columns]].copy()
     
+    df = df.dropna(subset=["org_code", "organisation_name"])
     df["org_code"]          = df["org_code"].astype(str).str.strip()
     df["organisation_name"] = df["organisation_name"].astype(str).str.strip()
+    df["provider_name_key"] = df["organisation_name"].map(provider_name_key)
     df["source_file"]       = source_file
+    df["source_sha256"]     = source_sha256
     df["financial_year"]    = financial_year
-    df = df.dropna(subset=["org_code"])
-    df = df[df["org_code"].str.len() == 3]
+    df = df[
+        df["org_code"].str.fullmatch(r"[A-Za-z0-9]{3}", na=False)
+        & df["organisation_name"].ne("")
+    ].copy()
     log.info("  Found %d providers", len(df))
     return df
 
@@ -114,13 +123,19 @@ def find_sheet_name(path: Path, target: str) -> str:
     """Return the actual sheet name matching target case-insensitively."""
     import openpyxl
     wb = openpyxl.load_workbook(path, read_only=True)
-    for name in wb.sheetnames:
-        if name.lower() == target.lower():
-            return name
-    raise ValueError(f"Sheet '{target}' not found in {path.name}. Available: {wb.sheetnames}")
+    try:
+        for name in wb.sheetnames:
+            if name.lower() == target.lower():
+                return name
+        raise ValueError(f"Sheet '{target}' not found in {path.name}. Available: {wb.sheetnames}")
+    finally:
+        wb.close()
 
 
-def read_all_data(path: Path, source_file: str, financial_year: str, trust_type: str) -> pd.DataFrame:
+def read_all_data(
+    path: Path, source_file: str, source_sha256: str,
+    financial_year: str, trust_type: str,
+) -> pd.DataFrame:
     log.info("  Reading All data sheet (this takes ~30s for large files)...")
     sheet_name = find_sheet_name(path, "All data")
     df = pd.read_excel(
@@ -156,57 +171,169 @@ def read_all_data(path: Path, source_file: str, financial_year: str, trust_type:
     df.columns = ["organisation_name", "worksheet_name", "table_id",
                   "main_code", "row_num", "sub_code", "total"]
 
+    before = len(df)
+    df = df.dropna(subset=[
+        "organisation_name", "worksheet_name", "table_id", "main_code", "row_num", "sub_code",
+    ])
+    dropped = before - len(df)
+    if dropped:
+        log.warning("  Dropped %d null rows", dropped)
+
     df["organisation_name"] = df["organisation_name"].astype(str).str.strip()
     df["worksheet_name"]    = df["worksheet_name"].astype(str).str.strip()
     df["main_code"]         = df["main_code"].astype(str).str.strip()
     df["sub_code"]          = df["sub_code"].astype(str).str.strip()
 
-    before = len(df)
-    df = df.dropna(subset=["organisation_name", "sub_code", "total"])
-    dropped = before - len(df)
-    if dropped:
-        log.warning("  Dropped %d null rows", dropped)
+    empty_required = (
+        df[["organisation_name", "worksheet_name", "main_code", "sub_code"]]
+        .eq("")
+        .any(axis=1)
+    )
+    if empty_required.any():
+        log.warning("  Dropped %d rows with blank required text fields", empty_required.sum())
+        df = df.loc[~empty_required].copy()
 
-    # Add year_type from MainCode, then keep CY only
+    # Preserve CY and PY in Bronze. Silver promotion selects CY only.
     df["year_type"] = df["main_code"].apply(infer_year_type)
-    df = df[df["year_type"] == "CY"].copy()
-
-    df["total"]          = pd.to_numeric(df["total"], errors="coerce").fillna(0).astype("int64")
+    numeric_total = pd.to_numeric(df["total"], errors="coerce")
+    invalid_total = df["total"].notna() & numeric_total.isna()
+    if invalid_total.any():
+        raise ValueError(f"{invalid_total.sum()} non-numeric Total values in {path.name}")
+    # TAC contains genuine fractional £000 values (up to five decimal places).
+    # Preserve source precision; never round these amounts to whole thousands.
+    df["total"]          = numeric_total.round(5)
+    df["provider_name_key"] = df["organisation_name"].map(provider_name_key)
     df["source_file"]    = source_file
+    df["source_sha256"]  = source_sha256
     df["trust_type"]     = trust_type
     df["financial_year"] = financial_year
 
-    log.info("  Loaded %d CY rows across %d providers",
-             len(df), df["organisation_name"].nunique())
+    current_rows = df[(df["year_type"] == "CY") & df["total"].notna()]
+    log.info("  Preserved %d source rows; %d populated CY rows across %d providers",
+             len(df), len(current_rows), current_rows["organisation_name"].nunique())
     return df
 
 
 # ── Validation ─────────────────────────────────────────────────────────────
 
-def validate(data_df: pd.DataFrame, provider_df: pd.DataFrame, filename: str) -> None:
+def validate(
+    data_df: pd.DataFrame, provider_df: pd.DataFrame, filename: str,
+    counts: dict[str, int] | None = None,
+) -> dict[str, int]:
     errors = []
-    for col in ["organisation_name", "sub_code", "total", "financial_year"]:
+    for col in [
+        "organisation_name", "worksheet_name", "table_id", "main_code", "row_num", "sub_code",
+        "financial_year",
+    ]:
         nulls = data_df[col].isna().sum()
         if nulls:
             errors.append(f"[CRITICAL] {nulls} nulls in '{col}'")
 
-    dupes = data_df.duplicated(subset=["organisation_name", "main_code", "sub_code"]).sum()
-    if dupes:
-        log.warning("  %d duplicate (org, main_code, sub_code) rows in %s", dupes, filename)
-
-    unmatched = set(data_df["organisation_name"]) - set(provider_df["organisation_name"])
-    if unmatched:
-        log.warning("  %d org names not in provider list: %s", len(unmatched), list(unmatched)[:3])
+    counts = counts or source_validation_counts(data_df, provider_df)
+    if counts["duplicate_rows"]:
+        errors.append(
+            f"[CRITICAL] {counts['duplicate_rows']} duplicated source rows at the full source grain"
+        )
+    if counts["duplicate_fact_key_rows"]:
+        errors.append(
+            f"[CRITICAL] {counts['duplicate_fact_key_rows']} populated CY rows collide at the fact key"
+        )
+    if counts["ambiguous_provider_keys"]:
+        errors.append(
+            f"[CRITICAL] {counts['ambiguous_provider_keys']} normalised provider names map to multiple ODS codes"
+        )
+    if counts["duplicate_provider_rows"]:
+        errors.append(
+            f"[CRITICAL] {counts['duplicate_provider_rows']} duplicated provider lookup rows"
+        )
+    if counts["unmatched_provider_rows"]:
+        fact_candidates = data_df[(data_df["year_type"] == "CY") & data_df["total"].notna()]
+        provider_keys = set(provider_df["provider_name_key"])
+        unmatched = sorted(
+            fact_candidates.loc[
+                ~fact_candidates["provider_name_key"].isin(provider_keys), "organisation_name"
+            ].unique()
+        )
+        errors.append(
+            f"[CRITICAL] {counts['unmatched_provider_rows']} populated CY rows have no provider mapping: "
+            f"{unmatched[:10]}"
+        )
 
     if errors:
         for e in errors:
             log.error(e)
         raise ValueError(f"Critical validation failures in {filename}")
 
-    log.info("  Validation passed")
+    log.info("  Source validation passed: %s", counts)
+    return counts
 
 
 # ── Database loaders ───────────────────────────────────────────────────────
+
+def record_import_batch(
+    source_file: str,
+    source_sha256: str,
+    file_size_bytes: int,
+    financial_year: str,
+    trust_type: str,
+    status: str,
+    counts: dict[str, int] | None = None,
+    error_message: str | None = None,
+) -> None:
+    counts = counts or {}
+    engine = get_engine(STG_DB)
+    sql = text("""
+        INSERT INTO import_batch
+            (source_file, source_sha256, file_size_bytes, financial_year, trust_type,
+             source_rows, current_year_rows, fact_candidate_rows, provider_rows,
+             duplicate_rows, duplicate_fact_key_rows, unmatched_provider_rows, ambiguous_provider_keys,
+             duplicate_provider_rows, status, error_message)
+        VALUES
+            (:source_file, :source_sha256, :file_size_bytes, :financial_year, :trust_type,
+             :source_rows, :current_year_rows, :fact_candidate_rows, :provider_rows,
+             :duplicate_rows, :duplicate_fact_key_rows, :unmatched_provider_rows, :ambiguous_provider_keys,
+             :duplicate_provider_rows, :status, :error_message)
+        ON DUPLICATE KEY UPDATE
+            file_size_bytes = VALUES(file_size_bytes),
+            source_rows = VALUES(source_rows),
+            current_year_rows = VALUES(current_year_rows),
+            fact_candidate_rows = VALUES(fact_candidate_rows),
+            provider_rows = VALUES(provider_rows),
+            duplicate_rows = VALUES(duplicate_rows),
+            duplicate_fact_key_rows = VALUES(duplicate_fact_key_rows),
+            unmatched_provider_rows = VALUES(unmatched_provider_rows),
+            ambiguous_provider_keys = VALUES(ambiguous_provider_keys),
+            duplicate_provider_rows = VALUES(duplicate_provider_rows),
+            status = VALUES(status),
+            error_message = VALUES(error_message),
+            started_ts = CASE WHEN VALUES(status) = 'STARTED'
+                              THEN CURRENT_TIMESTAMP ELSE started_ts END,
+            completed_ts = CASE
+                WHEN VALUES(status) IN ('LOADED', 'FAILED') THEN CURRENT_TIMESTAMP
+                WHEN VALUES(status) = 'STARTED' THEN NULL
+                ELSE completed_ts
+            END
+    """)
+    params = {
+        "source_file": source_file,
+        "source_sha256": source_sha256,
+        "file_size_bytes": file_size_bytes,
+        "financial_year": financial_year,
+        "trust_type": trust_type,
+        "source_rows": counts.get("source_rows"),
+        "current_year_rows": counts.get("current_year_rows"),
+        "fact_candidate_rows": counts.get("fact_candidate_rows"),
+        "provider_rows": counts.get("provider_rows"),
+        "duplicate_rows": counts.get("duplicate_rows"),
+        "duplicate_fact_key_rows": counts.get("duplicate_fact_key_rows"),
+        "unmatched_provider_rows": counts.get("unmatched_provider_rows"),
+        "ambiguous_provider_keys": counts.get("ambiguous_provider_keys"),
+        "duplicate_provider_rows": counts.get("duplicate_provider_rows"),
+        "status": status,
+        "error_message": error_message,
+    }
+    with engine.begin() as conn:
+        conn.execute(sql, params)
 
 def load_staging(data_df: pd.DataFrame, provider_df: pd.DataFrame,
                  financial_year: str, trust_type: str) -> None:
@@ -219,23 +346,29 @@ def load_staging(data_df: pd.DataFrame, provider_df: pd.DataFrame,
         conn.execute(text(
             "DELETE FROM stg_provider_list WHERE financial_year = :fy AND trust_type = :tt"
         ), {"fy": financial_year, "tt": trust_type})
+        provider_df["trust_type"] = trust_type
+        provider_df.to_sql(
+            "stg_provider_list", conn, if_exists="append", index=False, chunksize=500
+        )
+        data_df.to_sql(
+            "stg_tac_raw", conn, if_exists="append", index=False, chunksize=2000
+        )
 
-    provider_df["trust_type"] = trust_type
-    provider_df.to_sql("stg_provider_list", engine, if_exists="append", index=False, chunksize=500)
     log.info("  Loaded %d rows → nhs_bronze.stg_provider_list", len(provider_df))
-
-    data_df.to_sql("stg_tac_raw", engine, if_exists="append", index=False, chunksize=2000)
     log.info("  Loaded %d rows → nhs_bronze.stg_tac_raw", len(data_df))
 
 
-def populate_dim_trust(financial_year: str) -> None:
+def populate_dim_trust(financial_year: str, trust_type: str) -> None:
     stg_engine    = get_engine(STG_DB)
     silver_engine = get_engine(SILVER_DB)
 
     providers = pd.read_sql(
         "SELECT DISTINCT org_code, organisation_name, sector, region, source_file, financial_year "
-        "FROM stg_provider_list WHERE LENGTH(TRIM(org_code)) = 3",
+        "FROM stg_provider_list "
+        "WHERE financial_year = %(fy)s AND trust_type = %(tt)s "
+        "AND LENGTH(TRIM(org_code)) = 3",
         stg_engine,
+        params={"fy": financial_year, "tt": trust_type},
     )
     if providers.empty:
         log.warning("  No providers found in staging — skipping dim_trust")
@@ -276,7 +409,7 @@ def populate_dim_trust(financial_year: str) -> None:
 
 
 def promote_to_fact(financial_year: str, trust_type: str) -> None:
-    """Join staging data with provider list to get org_code, then upsert into fct_tac."""
+    """Resolve ODS codes and atomically replace one year/trust-type fact scope."""
     stg_engine    = get_engine(STG_DB)
     silver_engine = get_engine(SILVER_DB)
 
@@ -305,39 +438,49 @@ def promote_to_fact(financial_year: str, trust_type: str) -> None:
             r.sub_code,
             r.total          AS total_000s,
             r.trust_type,
-            r.source_file
+            r.source_file,
+            r.source_sha256
         FROM stg_tac_raw r
         JOIN stg_provider_list p
-            ON  r.organisation_name = p.organisation_name
+            ON  r.provider_name_key = p.provider_name_key
             AND r.financial_year    = p.financial_year
             AND r.trust_type        = p.trust_type
         WHERE r.financial_year = %(fy)s
           AND r.trust_type     = %(tt)s
+          AND r.year_type      = 'CY'
+          AND r.total IS NOT NULL
     """
     fact_df = pd.read_sql(sql, stg_engine, params={"fy": financial_year, "tt": trust_type})
     log.info("  Joined %d rows ready for fact table", len(fact_df))
 
     if fact_df.empty:
-        log.warning("  No rows to promote — check staging data")
-        return
+        raise ValueError("No populated CY rows resolved for fact promotion")
 
     # Upsert in chunks
     upsert_sql = text("""
         INSERT INTO fct_tac
             (org_code, financial_year, worksheet_name, table_id,
-             main_code, sub_code, total_000s, trust_type, source_file)
+             main_code, sub_code, total_000s, trust_type, source_file, source_sha256)
         VALUES
             (:org_code, :financial_year, :worksheet_name, :table_id,
-             :main_code, :sub_code, :total_000s, :trust_type, :source_file)
+             :main_code, :sub_code, :total_000s, :trust_type, :source_file, :source_sha256)
         ON DUPLICATE KEY UPDATE
-            total_000s  = VALUES(total_000s),
-            source_file = VALUES(source_file),
-            load_ts     = CURRENT_TIMESTAMP
+            worksheet_name = VALUES(worksheet_name),
+            table_id       = VALUES(table_id),
+            total_000s     = VALUES(total_000s),
+            source_file    = VALUES(source_file),
+            source_sha256  = VALUES(source_sha256),
+            load_ts        = CURRENT_TIMESTAMP
     """)
 
     chunk_size = 1000
     total_rows = 0
     with silver_engine.begin() as conn:
+        deleted = conn.execute(
+            text("DELETE FROM fct_tac WHERE financial_year = :fy AND trust_type = :tt"),
+            {"fy": financial_year, "tt": trust_type},
+        ).rowcount
+        log.info("  Cleared %d prior fact rows for this source scope", deleted)
         for start in range(0, len(fact_df), chunk_size):
             chunk = fact_df.iloc[start: start + chunk_size]
             conn.execute(upsert_sql, chunk.to_dict(orient="records"))
@@ -352,19 +495,46 @@ def process_file(path: Path) -> None:
     source_file    = path.name
     financial_year = filename_to_financial_year(source_file)
     trust_type     = filename_to_trust_type(source_file)
+    source_sha256  = sha256_file(path)
+    file_size      = path.stat().st_size
 
     log.info("=" * 60)
     log.info("FILE:  %s", source_file)
     log.info("YEAR:  %s  |  TYPE: %s", financial_year, trust_type)
     log.info("=" * 60)
 
-    provider_df = read_provider_list(path, source_file, financial_year)
-    data_df     = read_all_data(path, source_file, financial_year, trust_type)
+    counts: dict[str, int] = {}
+    record_import_batch(
+        source_file, source_sha256, file_size, financial_year, trust_type, "STARTED"
+    )
+    try:
+        provider_df = read_provider_list(
+            path, source_file, source_sha256, financial_year
+        )
+        provider_df["trust_type"] = trust_type
+        data_df = read_all_data(
+            path, source_file, source_sha256, financial_year, trust_type
+        )
 
-    validate(data_df, provider_df, source_file)
-    load_staging(data_df, provider_df, financial_year, trust_type)
-    populate_dim_trust(financial_year)
-    promote_to_fact(financial_year, trust_type)
+        counts = source_validation_counts(data_df, provider_df)
+        validate(data_df, provider_df, source_file, counts)
+        record_import_batch(
+            source_file, source_sha256, file_size, financial_year, trust_type,
+            "VALIDATED", counts,
+        )
+        load_staging(data_df, provider_df, financial_year, trust_type)
+        populate_dim_trust(financial_year, trust_type)
+        promote_to_fact(financial_year, trust_type)
+        record_import_batch(
+            source_file, source_sha256, file_size, financial_year, trust_type,
+            "LOADED", counts,
+        )
+    except Exception as exc:
+        record_import_batch(
+            source_file, source_sha256, file_size, financial_year, trust_type,
+            "FAILED", counts, str(exc)[:1000],
+        )
+        raise
 
     log.info("  DONE: %s\n", source_file)
 

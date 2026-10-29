@@ -26,6 +26,31 @@ CREATE DATABASE IF NOT EXISTS nhs_gold
 
 USE nhs_bronze;
 
+DROP TABLE IF EXISTS import_batch;
+CREATE TABLE import_batch (
+    import_id               BIGINT          NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    source_file             VARCHAR(200)    NOT NULL,
+    source_sha256           CHAR(64)        NOT NULL,
+    file_size_bytes         BIGINT          NOT NULL,
+    financial_year          CHAR(7)         NOT NULL,
+    trust_type              VARCHAR(20)     NOT NULL,
+    source_rows             BIGINT,
+    current_year_rows       BIGINT,
+    fact_candidate_rows     BIGINT,
+    provider_rows           INT,
+    duplicate_rows          BIGINT,
+    duplicate_fact_key_rows BIGINT,
+    unmatched_provider_rows BIGINT,
+    ambiguous_provider_keys INT,
+    duplicate_provider_rows INT,
+    status                  VARCHAR(20)     NOT NULL,
+    error_message           VARCHAR(1000),
+    started_ts              TIMESTAMP       DEFAULT CURRENT_TIMESTAMP,
+    completed_ts            TIMESTAMP       NULL,
+    UNIQUE KEY uq_import_batch (source_file, source_sha256),
+    INDEX idx_import_scope (financial_year, trust_type, status)
+) ENGINE=InnoDB;
+
 DROP TABLE IF EXISTS stg_tac_raw;
 CREATE TABLE stg_tac_raw (
     id                  BIGINT          NOT NULL AUTO_INCREMENT PRIMARY KEY,
@@ -35,13 +60,16 @@ CREATE TABLE stg_tac_raw (
     main_code           VARCHAR(20)     NOT NULL,
     row_num             SMALLINT        NOT NULL,
     sub_code            VARCHAR(20)     NOT NULL,
-    total               DECIMAL(14,0)   NOT NULL,        -- £000s
+    total               DECIMAL(18,5),                   -- £000s; preserves source precision and blanks
+    provider_name_key   VARCHAR(300)    NOT NULL,
     source_file         VARCHAR(200)    NOT NULL,
+    source_sha256       CHAR(64)        NOT NULL,
     trust_type          VARCHAR(20)     NOT NULL,        -- NHS_TRUST | FOUNDATION_TRUST
     financial_year      CHAR(7)         NOT NULL,        -- e.g. 2023/24
     year_type           CHAR(2)         NOT NULL,        -- CY | PY
     load_ts             TIMESTAMP       DEFAULT CURRENT_TIMESTAMP,
     INDEX idx_stg_org_year  (organisation_name(100), financial_year),
+    INDEX idx_stg_provider_key (provider_name_key(100), financial_year, trust_type),
     INDEX idx_stg_sub_code  (sub_code),
     INDEX idx_stg_year_type (financial_year, year_type)
 ) ENGINE=InnoDB;
@@ -54,12 +82,15 @@ CREATE TABLE stg_provider_list (
     region              VARCHAR(100),
     sector              VARCHAR(50),
     comments            TEXT,
+    provider_name_key   VARCHAR(300)    NOT NULL,
     source_file         VARCHAR(200)    NOT NULL,
+    source_sha256       CHAR(64)        NOT NULL,
     trust_type          VARCHAR(20)     NOT NULL,        -- NHS_TRUST | FOUNDATION_TRUST
     financial_year      CHAR(7)         NOT NULL,
     load_ts             TIMESTAMP       DEFAULT CURRENT_TIMESTAMP,
     INDEX idx_prov_org_code (org_code),
-    INDEX idx_prov_name     (organisation_name(100))
+    INDEX idx_prov_name     (organisation_name(100)),
+    INDEX idx_prov_key      (provider_name_key(100), financial_year, trust_type)
 ) ENGINE=InnoDB;
 
 
@@ -1260,9 +1291,10 @@ CREATE TABLE fct_tac (
     table_id            SMALLINT        NOT NULL,
     main_code           VARCHAR(20)     NOT NULL,
     sub_code            VARCHAR(20)     NOT NULL,
-    total_000s          DECIMAL(14,0)   NOT NULL,
+    total_000s          DECIMAL(18,5)   NOT NULL,
     trust_type          VARCHAR(20)     NOT NULL,
     source_file         VARCHAR(200)    NOT NULL,
+    source_sha256       CHAR(64)        NOT NULL,
     load_ts             TIMESTAMP       DEFAULT CURRENT_TIMESTAMP,
     UNIQUE KEY uq_tac (org_code, financial_year, main_code, sub_code),
     INDEX idx_fct_org_year  (org_code, financial_year),
@@ -1602,3 +1634,8 @@ FROM nhs_silver.fct_tac f
 JOIN nhs_silver.dim_trust t ON f.org_code = t.org_code
 WHERE f.worksheet_name = 'TAC03 SoFP'
 GROUP BY t.org_code, t.organisation_name, t.sector, t.region, t.trust_type, f.financial_year;
+
+-- Reapply the standalone canonical view definitions, including cash flow and reconciliation.
+-- MySQL 9+ disables client commands in batch mode unless --commands is supplied:
+--   mysql --commands -u root -p < sql/schema/create_tables_mysql.sql
+SOURCE sql/schema/deploy_gold_views.sql;

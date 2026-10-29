@@ -17,14 +17,16 @@ import is done (see the model diagram in `PROJECT_DOCUMENTATION.md`, stage ⑤):
 |------|------|------|-------------|
 | `dim_trust.csv` | `dim_trust` | 215 | Provider master — org_code, sector, region, trust_type |
 | `dim_financial_year.csv` | `dim_financial_year` | 5 | Calendar — 2019/20 to 2023/24 |
-| `kpis.csv` | `fact_kpis` | 624 | Pre-built KPIs (1 row per trust per year) |
-| `ie_summary.csv` | `fact_ie_summary` | 624 | I&E summary (income, expenditure, surplus) |
-| `expenditure_breakdown.csv` | `fact_expenditure_breakdown` | 624 | Pay / non-pay / drugs split |
-| `workforce.csv` | `fact_workforce` | 624 | Staff costs and WTE |
-| `income_detail.csv` | `fact_income_detail` | 9,144 | Income by line item |
-| `expenditure_detail.csv` | `fact_expenditure_detail` | 11,856 | Expenditure by line item |
-| `profit_and_loss.csv` | `fact_profit_and_loss` | ~624 | Full statutory P&L (all real TAC02 SoCI/SOC lines) |
-| `balance_sheet.csv` | `fact_balance_sheet` | ~624 | Full statutory Balance Sheet (all 40 TAC03 SoFP `BAL*` lines) |
+| `kpis.csv` | `fact_kpis` | 633 | Pre-built KPIs (1 row per trust per year) |
+| `ie_summary.csv` | `fact_ie_summary` | 633 | I&E summary (income, expenditure, surplus) |
+| `expenditure_breakdown.csv` | `fact_expenditure_breakdown` | 633 | Pay / non-pay / drugs split |
+| `workforce.csv` | `fact_workforce` | 633 | Staff costs and WTE |
+| `income_detail.csv` | `fact_income_detail` | 9,271 | Income by line item |
+| `expenditure_detail.csv` | `fact_expenditure_detail` | 12,027 | Expenditure by line item |
+| `profit_and_loss.csv` | `fact_profit_and_loss` | 633 | Full statutory P&L (all real TAC02 SoCI/SOC lines) |
+| `balance_sheet.csv` | `fact_balance_sheet` | 633 | Full statutory Balance Sheet (all 40 TAC03 SoFP `BAL*` lines) |
+| `cash_flow.csv` | `fact_cash_flow` | 633 | Statutory cash-flow summary |
+| `statement_reconciliation.csv` | `fact_statement_reconciliation` | 633 | Statement coverage and reconciliation residuals |
 | `sector_benchmarks.csv` | `fact_sector_benchmarks` | 30 | Aggregated sector totals |
 
 ### Import steps
@@ -32,7 +34,7 @@ import is done (see the model diagram in `PROJECT_DOCUMENTATION.md`, stage ⑤):
 2. Rename each table in the **Fields** pane to the `fact_`/`dim_` name in the table above
 3. On the **Home** tab, use **Transform Data** to verify column types:
    - `financial_year` → Text
-   - `_000s` columns → Whole Number
+   - `_000s` columns → Decimal Number (the source contains genuine fractional £000 values)
    - `_pct` columns → Decimal Number
    - `org_code` → Text
 
@@ -59,6 +61,10 @@ fact_profit_and_loss[org_code]          → dim_trust[org_code]
 fact_profit_and_loss[financial_year]    → dim_financial_year[financial_year]
 fact_balance_sheet[org_code]            → dim_trust[org_code]
 fact_balance_sheet[financial_year]      → dim_financial_year[financial_year]
+fact_cash_flow[org_code]                → dim_trust[org_code]
+fact_cash_flow[financial_year]          → dim_financial_year[financial_year]
+fact_statement_reconciliation[org_code] → dim_trust[org_code]
+fact_statement_reconciliation[financial_year] → dim_financial_year[financial_year]
 fact_sector_benchmarks[financial_year]  → dim_financial_year[financial_year]
 ```
 
