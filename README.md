@@ -54,7 +54,7 @@ The report design covers an executive summary, income and expenditure, cost pres
 
 ### Six-stage data analytics lifecycle
 
-![Six-stage NHS Trust financial analytics lifecycle showing sourcing, ingestion, cleaning, modelling, reporting preparation and visualisation](docs/images/six_stage_data_analytics_lifecycle.svg)
+![Six-stage NHS Trust financial analytics lifecycle showing sourcing, ingestion, cleaning, modelling, reporting preparation and visualisation](docs/images/nhs_trust_financial_analytics_lifecycle.png)
 
 The diagram connects the six methodological stages to NHS England TAC source data, Bronze raw records, Silver conformed financial records, Gold analytical models and the Power BI reporting layer. The dashboard is not yet published.
 
