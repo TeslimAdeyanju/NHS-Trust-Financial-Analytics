@@ -102,7 +102,9 @@ However, **financial accounts alone cannot establish the overall quality or effe
 For this project, financial sustainability means the capacity to meet obligations, manage resources and maintain safe healthcare delivery over time. **Covering annual costs is important but not sufficient**: liquidity, financial plans, cost pressures, productivity, capital commitments and continuity of patient services also matter.
 
 **Financial statement modelling and analysis:** I developed a financial statement modelling framework using NHS England's Trust Accounts Consolidation (TAC) data, covering the **Statement of Comprehensive Income (TAC02 SoCI)**, **Statement of Financial Position (TAC03 SoFP)** and **Statement of Cash Flows (TAC05 SoCF)**.    
+
 Using Python and SQL, I structured source records within MySQL Bronze, Silver and Gold layers, retaining accounting codes, signed values and reporting periods for traceability. I created statement-specific Gold SQL views to support analysis of operating results, financial position and cash flows, alongside reconciliation diagnostics for income and expenditure, balance sheet balances, cash movements and agreement of cash balances between statements.   
+
 These are implemented SQL definitions; execution and reconciliation against populated source data are documented separately. Technical implementation is covered in [Stage 3 — cleaning and validation](notebook/03-data-cleaning-and-transformation/README.md) and [Stage 4 — financial modelling and reconciliation](notebook/04-data-modelling-and-analytics/README.md).
 
 The project evaluates complementary measures:
