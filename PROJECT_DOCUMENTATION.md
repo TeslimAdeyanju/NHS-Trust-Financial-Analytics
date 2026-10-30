@@ -18,7 +18,7 @@ This document explains the business question, NHS accounting context, implemente
 
 **Methodology: Six-Stage Data Analytics Lifecycle**
 
-![NHS Trust Financial Analytics six-stage lifecycle and Bronze, Silver, Gold and Power BI reporting architecture](docs/images/six_stage_data_analytics_lifecycle.svg)
+![NHS Trust Financial Analytics six-stage lifecycle and Bronze, Silver, Gold and Power BI reporting architecture](docs/images/nhs_trust_financial_analytics_lifecycle.png)
 
 *Figure: The conceptual flow from NHS England TAC workbooks through ingestion, validation, financial modelling and curated reporting to Power BI insights. This represents the project methodology and does not indicate that a dashboard has been published.*
 
