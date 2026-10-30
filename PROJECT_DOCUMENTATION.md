@@ -61,10 +61,6 @@ These are **official published benchmarks, not independently reproduced outputs 
 
 **Primary source:** [NHS England — NHS providers TAC data publications](https://www.england.nhs.uk/financial-accounting-and-reporting/nhs-providers-tac-data-publications/).
 
-### Analytical approach
-
-The project uses Python to ingest and process NHS England TAC workbooks, MySQL to store and organise financial records, SQL to derive analytical views and KPIs, CSV exports to prepare curated reporting data, and Power BI/DAX assets to specify interactive reporting. Source accounting codes remain essential throughout: a polished chart is not an adequate substitute for a correctly defined financial measure.
-
 ---
 
 ## NHS Financial Reporting and Sustainability
