@@ -18,6 +18,10 @@ This document explains the business question, NHS accounting context, implemente
 
 **Methodology: Six-Stage Data Analytics Lifecycle**
 
+![NHS Trust Financial Analytics six-stage lifecycle and Bronze, Silver, Gold and Power BI reporting architecture](docs/images/six_stage_data_analytics_lifecycle.svg)
+
+*Figure: The conceptual flow from NHS England TAC workbooks through ingestion, validation, financial modelling and curated reporting to Power BI insights. This represents the project methodology and does not indicate that a dashboard has been published.*
+
 1. [Data Sourcing](#stage-1--data-sourcing) — obtain authoritative NHS England TAC data and define source controls.
 2. [Data Ingestion](#stage-2--data-ingestion) — capture source workbooks and load raw records to Bronze.
 3. [Data Cleaning & Transformation](#stage-3--data-cleaning--transformation) — standardise, validate and conform records in Silver.
