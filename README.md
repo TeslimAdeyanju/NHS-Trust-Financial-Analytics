@@ -58,8 +58,6 @@ The report design covers an executive summary, income and expenditure, cost pres
 
 The diagram connects the six methodological stages to NHS England TAC source data, Bronze raw records, Silver conformed financial records, Gold analytical models and the Power BI reporting layer. The dashboard is not yet published.
 
-![NHS Trust financial analytics data engineering architecture](docs/images/data_engineering_architecture.svg)
-
 The six stages are Data Sourcing, Data Ingestion, Data Cleaning & Transformation, Data Modelling & Analytics, Data Preparation for Reporting, and Data Visualisation & Insights. The implementation uses MySQL Bronze, Silver and Gold layers. The Power BI dashboard remains pending publication. The detailed schema, data checks, source mapping and implementation choices are explained in [Project Documentation](PROJECT_DOCUMENTATION.md).
 
 ## Documentation and reproducibility
