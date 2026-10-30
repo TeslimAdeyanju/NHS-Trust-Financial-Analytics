@@ -58,7 +58,16 @@ The report design covers an executive summary, income and expenditure, cost pres
 
 The diagram connects the six methodological stages to NHS England TAC source data, Bronze raw records, Silver conformed financial records, Gold analytical models and the Power BI reporting layer. The dashboard is not yet published.
 
-The six stages are Data Sourcing, Data Ingestion, Data Cleaning & Transformation, Data Modelling & Analytics, Data Preparation for Reporting, and Data Visualisation & Insights. The implementation uses MySQL Bronze, Silver and Gold layers. The Power BI dashboard remains pending publication. The detailed schema, data checks, source mapping and implementation choices are explained in [Project Documentation](PROJECT_DOCUMENTATION.md).
+Explore the six stages and their implementation notes:
+
+- **[Data Sourcing](notebook/01-data-sourcing/README.md):** Obtain NHS England TAC workbooks and establish source controls.
+- **[Data Ingestion](notebook/02-data-ingestion/README.md):** Load raw financial records into the Bronze layer.
+- **[Data Cleaning & Transformation](notebook/03-data-cleaning-and-transformation/README.md):** Validate and standardise financial records in Silver.
+- **[Data Modelling & Analytics](notebook/04-data-modelling-and-analytics/README.md):** Build SQL dimensions, facts and financial KPIs in Silver and Gold.
+- **[Data Preparation for Reporting](notebook/05-data-preparation-for-reporting/README.md):** Create curated datasets and reporting exports.
+- **[Data Visualisation & Insights](notebook/06-data-visualisation-and-insights/README.md):** Develop Power BI reporting and financial insights; dashboard publication is pending.
+
+The implementation uses MySQL Bronze, Silver and Gold layers. Detailed schemas, data checks, source mappings and design decisions are documented in [Project Documentation](PROJECT_DOCUMENTATION.md).
 
 ## Documentation and reproducibility
 
