@@ -20,6 +20,7 @@ from pathlib import Path
 import pandas as pd
 from sqlalchemy import create_engine, text
 
+# -- Timestamped logging configuration --
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s  %(levelname)-8s  %(message)s",
@@ -35,21 +36,25 @@ DB_PASSWORD = os.getenv("DB_PASSWORD")
 DB_HOST     = os.getenv("DB_HOST", "127.0.0.1")
 DB_PORT     = int(os.getenv("DB_PORT", "3306"))
 
+# Database and file configuration 
 STG_DB      = "nhs_bronze"
 SILVER_DB   = "nhs_silver"
 
 RAW_DIR       = Path("data/raw")
 PROCESSED_DIR = Path("data/processed")
 
+# Financial year regex --
 YEAR_RE = re.compile(r"(\d{4})-(\d{2})")
 
+# Raw TAC Excel columns from All Sheets 
 RAW_COLUMNS = [
     "OrganisationName", "WorkSheetName", "TableID",
     "MainCode", "RowNumber", "SubCode", "Total",
 ]
 
-# ── Helpers ────────────────────────────────────────────────────────────────
+# ──  Helpers module ────────────────────────────────────────────────────────────────
 
+# Database connection
 def get_engine(database: str):
     if not DB_PASSWORD:
         raise RuntimeError("DB_PASSWORD environment variable is required for MySQL access")
@@ -61,25 +66,25 @@ def get_engine(database: str):
     )
     return create_engine(url, echo=False)
 
-
+# Extract financial year from filename
 def filename_to_financial_year(filename: str) -> str:
     match = YEAR_RE.search(filename)
     if not match:
         raise ValueError(f"Cannot extract financial year from: {filename}")
     return f"{match.group(1)}/{match.group(2)}"
 
-
+# Determine trust type from filename
 def filename_to_trust_type(filename: str) -> str:
     return "FOUNDATION_TRUST" if "foundation" in filename.lower() else "NHS_TRUST"
 
-
+# Infer year type (Current Year or Prior Year) from main code
 def infer_year_type(main_code: str) -> str:
     if "PY" in str(main_code):
         return "PY"
     return "CY"
 
 
-# ── Readers ────────────────────────────────────────────────────────────────
+# ── Readers Module ────────────────────────────────────────────────────────────────
 
 def read_provider_list(path: Path, source_file: str, financial_year: str) -> pd.DataFrame:
     log.info("  Reading provider list...")
@@ -181,7 +186,7 @@ def read_all_data(path: Path, source_file: str, financial_year: str, trust_type:
     return df
 
 
-# ── Validation ─────────────────────────────────────────────────────────────
+# ── Validation Module ─────────────────────────────────────────────────────────────
 
 def validate(data_df: pd.DataFrame, provider_df: pd.DataFrame, filename: str) -> None:
     errors = []
