@@ -5,12 +5,12 @@
 > `data/processed/powerbi_export/` — populated by `python/reporting/export_for_powerbi.py`, which
 > queries the views and tables from [stage ④](../04-data-modelling-and-analytics/README.md) — connecting to `nhs_gold`,
 > fully-qualifying `nhs_silver.dim_trust`/`nhs_silver.dim_subcode` for the joins that need them — and
-> writes eleven CSVs in roughly 30 seconds. This stage's only job is portability: turn a live database
+> writes thirteen CSVs. This stage's only job is portability: turn a live database
 > dependency into flat files any tool — Power BI, a reviewer with no MySQL access — can consume.
 
 ---
 
-## One Helper, Ten Callers
+## One Helper, Twelve Callers
 
 Every export funnels through a single function:
 
@@ -23,11 +23,11 @@ def export_query(engine, sql: str, filename: str, **params) -> int:
     return len(df)
 ```
 
-`main()` just calls ten `export_*(engine)` functions in sequence — `export_dimensions` (writes both
+`main()` calls twelve `export_*(engine)` functions in sequence — `export_dimensions` (writes both
 `dim_trust.csv` and `dim_financial_year.csv` in one call), `export_ie_summary`,
 `export_expenditure_breakdown`, `export_workforce`, `export_kpis`, `export_income_detail`,
-`export_expenditure_detail`, `export_profit_and_loss`, `export_balance_sheet`,
-`export_sector_benchmarks` — eleven files total. No orchestration logic beyond that: each function owns
+`export_expenditure_detail`, `export_profit_and_loss`, `export_balance_sheet`, `export_cash_flow`,
+`export_statement_reconciliation`, `export_sector_benchmarks` — thirteen files total. Each function owns
 one SQL query and one output file.
 
 ---
@@ -38,23 +38,23 @@ one SQL query and one output file.
 Excel — and Power BI's CSV connector, which shares Excel's parser on Windows — misreads the `£` symbol in
 column values. This bit me once during testing; it's now non-negotiable on every export in this file.
 
-**`CAST(... AS SIGNED)` in the SQL itself**, on every `_000s` column, rather than trusting pandas to
+**`CAST(... AS DOUBLE)` in the SQL itself**, on every numeric column, rather than trusting pandas to
 coerce MySQL's native `DECIMAL`:
 
 ```sql
 SELECT
     org_code, organisation_name, sector, region, trust_type, financial_year,
-    CAST(patient_care_income_000s AS SIGNED) AS patient_care_income_000s,
-    CAST(total_income_000s AS SIGNED)         AS total_income_000s,
-    CAST(operating_surplus_000s AS SIGNED)    AS operating_surplus_000s,
-    CAST(net_surplus_000s AS SIGNED)          AS net_surplus_000s
+    CAST(patient_care_income_000s AS DOUBLE) AS patient_care_income_000s,
+    CAST(total_income_000s AS DOUBLE)         AS total_income_000s,
+    CAST(operating_surplus_000s AS DOUBLE)    AS operating_surplus_000s,
+    CAST(net_surplus_000s AS DOUBLE)          AS net_surplus_000s
 FROM v_income_expenditure
 ORDER BY financial_year, org_code
 ```
 
-Reading an unwrapped `DECIMAL(14,0)` column back into pandas produces Python `Decimal` objects, which
-write to CSV with inconsistent formatting. Casting to a signed integer in SQL guarantees plain numbers in
-the file, every time.
+Reading an unwrapped `DECIMAL(18,5)` column back into pandas produces Python `Decimal` objects, which
+write to CSV with inconsistent formatting. Casting to `DOUBLE` provides plain numeric values while
+preserving the source's fractional £000 precision.
 
 ---
 
@@ -70,7 +70,7 @@ SELECT
     t.org_code, t.organisation_name, t.sector, t.trust_type,
     f.financial_year, f.sub_code,
     sc.description AS line_item, sc.analytics_category,
-    CAST(f.total_000s AS SIGNED) AS amount_000s
+    CAST(f.total_000s AS DOUBLE) AS amount_000s
 FROM fct_tac f
 JOIN dim_trust   t  ON f.org_code = t.org_code
 JOIN dim_subcode sc ON f.sub_code = sc.sub_code
@@ -98,7 +98,7 @@ sector-level sums in £000s run to eight figures and stop being readable on a be
 
 ---
 
-## The Eleven Files
+## The Thirteen Files
 
 | File | Source | Grain |
 |------|--------|-------|
@@ -112,9 +112,31 @@ sector-level sums in £000s run to eight figures and stop being readable on a be
 | `expenditure_detail.csv` | `nhs_silver.fct_tac` + `dim_subcode`, filtered | One row per trust per year per expenditure SubCode |
 | `profit_and_loss.csv` | `v_profit_and_loss` | One row per trust per year — full statutory P&L, ~27 lines pivoted into columns |
 | `balance_sheet.csv` | `v_balance_sheet` | One row per trust per year — full statutory Balance Sheet, 40 `BAL*` lines pivoted into columns |
+| `cash_flow.csv` | `v_cash_flow` | One row per trust per year — statutory cash movements and closing cash |
+| `statement_reconciliation.csv` | `v_statement_reconciliation` | One row per trust per year — statement coverage and reconciliation residuals |
 | `sector_benchmarks.csv` | `v_kpis`, aggregated | One row per financial year per sector per trust type |
 
 Full column-by-column schema for each file is in `PROJECT_DOCUMENTATION.md`, stage ⑤.
+
+## Verified reporting outputs — 29 October 2026
+
+The completed export produced all thirteen reporting files successfully:
+
+| Output group | Files | Verified rows |
+|---|---|---:|
+| Dimensions | `dim_trust.csv`, `dim_financial_year.csv` | 215; 5 |
+| Trust/year summaries | I&E, expenditure, workforce, KPIs, P&L, balance sheet, cash flow, reconciliation | 633 each |
+| Line-item detail | `income_detail.csv`, `expenditure_detail.csv` | 9,271; 12,027 |
+| Sector benchmark | `sector_benchmarks.csv` | 30 |
+
+The cash-flow and reconciliation outputs contain no duplicate `(org_code, financial_year)` keys. The
+reconciliation file has complete SoCI, SoFP and SoCF coverage for all 633 rows.
+
+The enrichment script writes a separate nine-file set to `data/processed/transformed/`. This separation
+is intentional: transformed KPI flags, income mix and year-on-year measures must not be overwritten by
+the canonical Power BI export process. Its verified outputs include 633-row KPI, I&E, expenditure and
+workforce tables, 13,069 income-detail rows, 12,660 expenditure-detail rows and 15 sector/year benchmark
+rows.
 
 ---
 
@@ -124,9 +146,10 @@ Full column-by-column schema for each file is in `PROJECT_DOCUMENTATION.md`, sta
 |---------|------------------|-----|
 | One `export_query()` helper | Every export funnels through it | One place to get encoding/logging right, once |
 | `utf-8-sig` on every file | BOM-prefixed UTF-8 | Excel/Power BI's CSV connector misreads `£` without it |
-| `CAST(... AS SIGNED)` on every `_000s` column | Done in SQL, not pandas | Avoids `Decimal`-object formatting noise in the CSV |
+| `CAST(... AS DOUBLE)` on numeric columns | Done in SQL, not pandas | Preserves fractional £000 values and avoids `Decimal` formatting noise |
 | Two detail exports query `fct_tac` directly | No summary view produces line-item grain | `is_subtotal = 0` prevents double-counting on import |
 | `sector_benchmarks.csv` is in £m, not £000s | Divided by 1,000 in the SQL | Sector-level £000s sums are unreadable on a chart axis |
+| Separate `transformed/` output | Enrichment never writes over `powerbi_export/` | Prevents script order from silently changing reporting schemas |
 
 ---
 
@@ -134,7 +157,7 @@ Full column-by-column schema for each file is in `PROJECT_DOCUMENTATION.md`, sta
 
 | File | What to Read |
 |------|-------------|
-| [python/reporting/export_for_powerbi.py](../../python/reporting/export_for_powerbi.py) | Full script — `export_query()` plus all ten `export_*()` functions |
+| [python/reporting/export_for_powerbi.py](../../python/reporting/export_for_powerbi.py) | Full script — `export_query()` plus all twelve `export_*()` functions |
 | [PROJECT_DOCUMENTATION.md](../../PROJECT_DOCUMENTATION.md), stage ⑤ | The narrative version, plus the full per-file column schema and the Power BI model diagram |
 
 ---

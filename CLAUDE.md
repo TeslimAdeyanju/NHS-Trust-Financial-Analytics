@@ -14,12 +14,12 @@ findings and [PROJECT_DOCUMENTATION.md](PROJECT_DOCUMENTATION.md) for the full d
 
 **Three-database MySQL medallion pattern**, built by `sql/schema/create_tables_mysql.sql`:
 
-- `nhs_bronze` — raw landing: `stg_tac_raw` (raw rows from the "All data" sheet), `stg_provider_list`
-  (trust name → ODS code lookup from the "List of Providers" sheet). Reloaded per file with
-  DELETE+INSERT, so reruns are idempotent.
+- `nhs_bronze` — raw landing: `stg_tac_raw` (CY and PY rows, including blank amounts),
+  `stg_provider_list` (normalised trust-name → ODS lookup), and `import_batch` (SHA-256 and load audit).
+  Reloaded per file with scoped DELETE+INSERT.
 - `nhs_silver` — conformed: dims `dim_trust`, `dim_financial_year`, `dim_worksheet`, `dim_subcode`; one
   fact table `fct_tac`.
-- `nhs_gold` — curated: seven `v_*` analytical views (see below), each referencing `nhs_silver.*` tables
+- `nhs_gold` — curated: nine `v_*` analytical views (see below), each referencing `nhs_silver.*` tables
   via fully-qualified cross-database names (MySQL views can query another database on the same server
   without qualification tricks — `FROM nhs_silver.fct_tac`, etc.).
 
@@ -43,14 +43,14 @@ SubCode reference and `PROJECT_DOCUMENTATION.md`, stage ④, for the full star-s
 ```
 data/raw/*.xlsx  →  python/ingestion/load_tac_data.py       →  nhs_bronze.* , nhs_silver.dim_trust / fct_tac
                  →  sql/views/*.sql (or create_tables_mysql.sql)  →  nhs_gold.v_*
-                 →  python/transformation/transform_tac_data.py   →  data/processed/*.csv (enrichment/benchmarks)
+                 →  python/transformation/transform_tac_data.py   →  data/processed/transformed/*.csv
                  →  python/transformation/validate_tac_data.py    →  data/processed/validation_report.csv
                  →  python/reporting/export_for_powerbi.py        →  data/processed/powerbi_export/*.csv
 ```
 
 Each Excel file drives one `financial_year` × `trust_type` (`NHS_TRUST` or `FOUNDATION_TRUST`) load. Each
-annual file contains both Current Year (CY) and Prior Year (PY) rows for comparison — the ingestion layer
-keeps **CY only** (`main_code` filtered on `year_type`) to avoid double-counting across years.
+annual file contains both Current Year (CY) and Prior Year (PY) rows for comparison. Bronze preserves both;
+Silver promotion keeps **CY only** (`year_type = 'CY'`) to avoid double-counting across years.
 
 **View layer** (`nhs_gold.v_*`, defined in both `sql/schema/create_tables_mysql.sql` and standalone under
 `sql/views/` — the standalone files are the fuller/canonical versions, check both if a view looks out of
@@ -65,6 +65,9 @@ date):
 - `v_balance_sheet` — full statutory Balance Sheet: all 40 real TAC03 SoFP `BAL*` lines, non-current/
   current assets and liabilities down to `total_equity_000s`. Unlike SoCI/EXP, this schedule already
   stores correctly signed values in the raw data (liabilities negative) — no sign-flipping in the pivot
+- `v_cash_flow` — TAC05 SoCF operating, investing and financing flows, net cash movement and closing cash
+- `v_statement_reconciliation` — statement coverage flags and explicit SoCI, SoFP, SoCF and cross-statement
+  residuals; missing inputs remain null rather than being treated as passing checks
 - `v_kpis` — joins income/expenditure/workforce views and computes EBITDA margin, pay % of income, cost
   per WTE, net surplus margin, plus RAG flags
 - `v_trust_annual_scorecard` — wide view combining everything, built for DirectQuery and ad-hoc SQL; used
@@ -106,15 +109,17 @@ CLAUDE.md files, trust the code.
 
 ## Commands
 
-No test suite, linter, or `requirements.txt` exists in this repo yet — don't assume `pytest`/`ruff` are
-configured; `python/CLAUDE.md` confirms this directly.
+The project has a small `unittest` regression suite and a `requirements.txt`; no linter is configured.
 
 ```bash
-# Dependencies (no requirements.txt — install directly)
-pip install pandas sqlalchemy pymysql openpyxl
+# Dependencies
+pip install -r requirements.txt
+
+# Focused regression tests
+python -m unittest discover -s tests -v
 
 # 1. Build schema (databases, tables, seed dimensions, views) — run the whole file in a MySQL client
-mysql -u root -p < sql/schema/create_tables_mysql.sql
+mysql --commands -u root -p < sql/schema/create_tables_mysql.sql
 
 # 2. Ingest all 6 TAC files found in data/raw/ (~10-15 min)
 python python/ingestion/load_tac_data.py
@@ -131,11 +136,8 @@ python python/transformation/transform_tac_data.py
 python python/reporting/export_for_powerbi.py
 ```
 
-DB connection settings (`DB_USER`, `DB_PASSWORD`, `DB_HOST`, `DB_PORT`) are hardcoded at the top of each
-`python/**/*.py` script (`root` / local MySQL on `127.0.0.1:3306`) rather than read from environment — a
-known, intentional shortcut for a portfolio project that only ever runs against one local MySQL server (see
-`python/CLAUDE.md`), not an oversight to "fix" unasked. Update the constants in each script if your local
-MySQL differs.
+All database scripts read `DB_PASSWORD` from the environment; `DB_USER`, `DB_HOST`, and `DB_PORT` also
+support environment overrides and default to `root`, `127.0.0.1`, and `3306`.
 
 `data/raw/` (source Excel, ~170MB) and `data/processed/` (generated) are git-ignored — regenerate rather
 than expecting them to be present after a fresh clone.

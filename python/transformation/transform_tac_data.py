@@ -20,10 +20,12 @@ Usage:
 """
 
 import logging
+import os
 from pathlib import Path
 
 import pandas as pd
 from sqlalchemy import create_engine
+from sqlalchemy.engine import URL
 
 logging.basicConfig(
     level=logging.INFO,
@@ -34,14 +36,14 @@ log = logging.getLogger(__name__)
 
 # ── Config ───────────────────────────────────────────────────────────────────
 
-DB_USER     = "root"
-DB_PASSWORD = "Password1234"
-DB_HOST     = "127.0.0.1"
-DB_PORT     = 3306
+DB_USER     = os.getenv("DB_USER", "root")
+DB_PASSWORD = os.getenv("DB_PASSWORD")
+DB_HOST     = os.getenv("DB_HOST", "127.0.0.1")
+DB_PORT     = int(os.getenv("DB_PORT", "3306"))
 GOLD_DB     = "nhs_gold"   # views live here; nhs_silver.* is qualified in queries that need it
 
 PROCESSED_DIR    = Path("data/processed")
-POWERBI_DIR      = PROCESSED_DIR / "powerbi_export"
+TRANSFORMED_DIR  = PROCESSED_DIR / "transformed"
 
 FINANCIAL_YEARS  = ["2021/22", "2022/23", "2023/24"]
 
@@ -78,9 +80,12 @@ LARGE_TRUST_INCOME_THRESHOLD_000S = 1_000_000
 
 
 def get_engine():
-    url = (
-        f"mysql+pymysql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}"
-        f"/{GOLD_DB}?charset=utf8mb4"
+    if not DB_PASSWORD:
+        raise RuntimeError("DB_PASSWORD environment variable is required for MySQL access")
+    url = URL.create(
+        drivername="mysql+pymysql", username=DB_USER, password=DB_PASSWORD,
+        host=DB_HOST, port=DB_PORT, database=GOLD_DB,
+        query={"charset": "utf8mb4"},
     )
     return create_engine(url, echo=False)
 
@@ -108,14 +113,10 @@ def add_trust_flags(df: pd.DataFrame) -> pd.DataFrame:
     # EBITDA RAG — consistent with kpi_definitions.md thresholds
     df["ebitda_rag"] = pd.cut(
         df["ebitda_margin_pct"],
-        bins=[-999, 0, 2, 5, 999],
-        labels=["Red", "Red", "Amber", "Green"],
+        bins=[float("-inf"), 2, 5, float("inf")],
+        labels=["Red", "Amber", "Green"],
         right=False,
-    ).astype(str)
-    # Correct the double Red bin edge
-    df.loc[df["ebitda_margin_pct"] < 2, "ebitda_rag"] = "Red"
-    df.loc[(df["ebitda_margin_pct"] >= 2) & (df["ebitda_margin_pct"] < 5), "ebitda_rag"] = "Amber"
-    df.loc[df["ebitda_margin_pct"] >= 5, "ebitda_rag"] = "Green"
+    ).astype("string")
 
     return df
 
@@ -242,7 +243,7 @@ def build_expenditure_detail(engine) -> pd.DataFrame:
 # ── Main ─────────────────────────────────────────────────────────────────────
 
 def main() -> None:
-    POWERBI_DIR.mkdir(parents=True, exist_ok=True)
+    TRANSFORMED_DIR.mkdir(parents=True, exist_ok=True)
     engine = get_engine()
 
     log.info("=" * 60)
@@ -275,6 +276,9 @@ def main() -> None:
     log.info("Building expenditure detail...")
     expenditure_detail = build_expenditure_detail(engine)
 
+    log.info("Loading workforce detail...")
+    workforce = pd.read_sql("SELECT * FROM v_workforce", engine)
+
     # Dimension tables
     dim_trust = pd.read_sql("SELECT * FROM nhs_silver.dim_trust", engine)
     dim_year  = pd.read_sql("SELECT * FROM nhs_silver.dim_financial_year", engine)
@@ -298,10 +302,7 @@ def main() -> None:
             "depreciation_amort_000s", "drugs_cost_000s", "clinical_negligence_000s",
             "clinical_supplies_000s", "general_supplies_000s",
         ]],
-        "workforce.csv":               scorecard[[
-            "org_code", "financial_year", "total_wte", "total_staff_cost_000s",
-            "gross_staff_cost_000s", "medical_wte", "nursing_wte",
-        ]],
+        "workforce.csv":               workforce,
         "sector_benchmarks.csv":       benchmarks,
         "income_detail.csv":           income_detail,
         "expenditure_detail.csv":      expenditure_detail,
@@ -310,14 +311,14 @@ def main() -> None:
     }
 
     for filename, df in exports.items():
-        path = POWERBI_DIR / filename
+        path = TRANSFORMED_DIR / filename
         # Drop columns that aren't in the df (scorecard may not have all columns)
         df = df[[c for c in df.columns if c in df.columns]]
         df.to_csv(path, index=False)
         log.info("  Written: %s (%d rows)", filename, len(df))
 
     log.info("=" * 60)
-    log.info("TRANSFORMATION COMPLETE — %d files written to %s", len(exports), POWERBI_DIR)
+    log.info("TRANSFORMATION COMPLETE — %d files written to %s", len(exports), TRANSFORMED_DIR)
     log.info("=" * 60)
 
 

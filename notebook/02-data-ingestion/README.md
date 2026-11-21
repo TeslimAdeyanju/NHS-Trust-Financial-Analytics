@@ -12,12 +12,12 @@
 
 ```text
 data/raw/
-  TAC_NHS_trusts_2021-22.xlsx             16MB  —  66 NHS Trusts
-  TAC_NHS_foundation_trusts_2021-22.xlsx  33MB  — 140 Foundation Trusts
-  TAC_NHS_trusts_2022-23.xlsx             20MB  —  66 NHS Trusts
-  TAC_NHS_foundation_trusts_2022-23.xlsx  36MB  — 140 Foundation Trusts
-  TAC_NHS_trusts_2023-24.xlsx             18MB  —  66 NHS Trusts
-  TAC_NHS_foundation_trusts_2023-24.xlsx  38MB  — 140 Foundation Trusts
+  TAC_NHS_trusts_2021-22.xlsx             16MB  —  70 provider-list rows
+  TAC_NHS_foundation_trusts_2021-22.xlsx  33MB  — 145 provider-list rows
+  TAC_NHS_trusts_2022-23.xlsx             20MB  —  69 provider-list rows
+  TAC_NHS_foundation_trusts_2022-23.xlsx  36MB  — 144 provider-list rows
+  TAC_NHS_trusts_2023-24.xlsx             18MB  —  68 provider-list rows
+  TAC_NHS_foundation_trusts_2023-24.xlsx  38MB  — 143 provider-list rows
 ```
 
 **Why 2 files per year?** NHS Trusts and Foundation Trusts are published separately. Same column
@@ -44,7 +44,8 @@ files = sorted(
 
 ### Sheet 1 — "List of Providers"
 
-Small lookup table, one row per trust (66 or 140 rows).
+Small annual lookup table, one row per listed provider (68–70 NHS Trust rows or 143–145 Foundation Trust
+rows in the verified files). Not every listed provider necessarily has populated CY fact rows.
 
 | Column | Example |
 | ------ | ------- |
@@ -158,10 +159,35 @@ else happens. Rename a file and the pipeline mis-tags every row inside it — th
 
 | Issue | How handled |
 |-------|-------------|
-| `Total` column arrives as float (Excel `NaN` for blanks) | Read as `float`, `fillna(0)`, cast to `int64` only after CY/PY filtering |
+| `Total` column arrives as float (Excel `NaN` for blanks) | Preserve blanks as `NULL` in Bronze; numeric zero remains a genuine zero |
 | Organisation names have trailing spaces | `.str.strip()` on every string column |
 | Negative values in expenditure | Valid — stored as-is; sign convention follows TAC, not remapped |
-| PY rows mixed with CY rows | Filtered on `main_code` containing `"PY"` before any row is written |
+| PY rows mixed with CY rows | Preserve both in Bronze; filter to CY only during Silver promotion |
+| Genuine fractional £000 amounts | Round only to the source's five-decimal precision and store as `DECIMAL(18,5)`; never coerce to whole thousands |
+
+## Verified ingestion run — 29 October 2026
+
+The six production workbooks were loaded into a freshly rebuilt MySQL environment. `source_rows` is the
+number preserved in Bronze after identifying-field checks; `fact_candidate_rows` is the populated CY
+population promoted to Silver.
+
+| Source workbook | Provider-list rows | Providers with populated CY facts | Source rows | Fact candidate rows |
+|---|---:|---:|---:|---:|
+| Foundation Trusts 2021/22 | 145 | 145 | 884,210 | 446,890 |
+| Foundation Trusts 2022/23 | 144 | 144 | 970,560 | 543,168 |
+| Foundation Trusts 2023/24 | 143 | 140 | 1,006,040 | 505,400 |
+| NHS Trusts 2021/22 | 70 | 70 | 432,950 | 217,280 |
+| NHS Trusts 2022/23 | 69 | 68 | 464,780 | 258,128 |
+| NHS Trusts 2023/24 | 68 | 66 | 481,140 | 240,108 |
+| **Total** | **639 annual provider rows** | — | **4,239,680** | **2,210,974** |
+
+The difference between provider-list rows and providers with populated facts is not an unmatched join:
+all populated CY rows resolved successfully. It reflects provider-list entries without populated CY facts
+in those files. Across the six workbooks, 131,858 populated amounts contained genuine fractional £000
+values, which is why the warehouse uses five-decimal storage.
+
+Every file finished with `LOADED` status in `nhs_bronze.import_batch`, carrying its filename, SHA-256,
+row counts and integrity results.
 
 ---
 
@@ -171,10 +197,11 @@ else happens. Rename a file and the pipeline mis-tags every row inside it — th
 |---------------------------------------------|----------------------------------------------------------|
 | 2 sheets per file                           | "List of Providers" = lookup; "All data" = facts        |
 | 7 columns in "All data"                     | Minimal structure to identify any line for any trust     |
-| CY and PY rows mixed                        | Must filter to CY only across all six files              |
-| Name in "All data", code in provider list   | A join is required to resolve ODS codes — see stage ③   |
+| CY and PY rows mixed                        | Preserve both in Bronze; promote CY to Silver            |
+| Name in "All data", code in provider list   | Use deterministic normalisation and reviewed aliases to resolve ODS codes |
 | Column names differ in 2021/22              | Pipeline handles format changes silently                 |
 | Total in £000s                              | Never divide or multiply here — store as-is              |
+| Six-file live run                           | 4,239,680 Bronze rows; 2,210,974 populated CY facts      |
 
 ---
 

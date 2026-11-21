@@ -1,7 +1,9 @@
 # NHS provider financial reconciliation: 2021/22–2023/24
 
-**Status:** Preliminary accounting-basis reconciliation and source/code audit. **Not** a completed row-by-row reconciliation against the six TAC workbooks or a live MySQL run.  
-**Prepared:** 28 October 2026  
+**Status:** Source/code audit and live three-statement validation completed; national accounting-basis reconciliation remains preliminary.
+
+**Prepared:** 28 October 2026; live-run evidence updated 29 October 2026
+
 **Scope:** NHS trusts and NHS foundation trusts. All monetary amounts below are £ million unless noted.
 
 ## 1. Purpose and conclusion
@@ -56,12 +58,21 @@ Primary official documents: [2022/23 accounts](https://www.gov.uk/government/pub
 2. `sql/views/v_kpis.sql` defines `is_deficit = 1` whenever **operating** surplus is negative. That is *not* NHS England's official deficit-before-impairments-and-transfers classification.
 3. `sql/views/v_trust_annual_scorecard.sql` repeats the operating-based `is_deficit` classification. The national trend SQL sums this flag, creating incomparable published provider counts.
 4. `v_kpis` filters `ie.total_income_000s > 0`. This excludes records from the portfolio population and may change the count independently of organisational mergers and source coverage.
-5. `v_income_expenditure` uses `MAX(CASE WHEN ...)` by provider/year without demonstrating uniqueness by TAC data type, source file or MainCode. Check for duplicate records and unintended aggregation loss.
-6. `python/ingestion/load_tac_data.py` infers CY/PY from the MainCode using a string test and joins providers by name in its ingestion workflow. These must be checked against year-specific source schemas and ODS identifiers.
-7. The ingestion script contains a hard-coded database password. Move credentials to environment variables and rotate the password **if used**. This is an immediate hygiene issue independent of the reconciliation.
-8. `v_kpis.sql`'s EBITDA RAG CASE expression lacks parentheses around the whole numerator; due to operator precedence it is not equivalent to the correctly calculated `ebitda_margin_pct`. Separately review KPI definitions and thresholds before dashboard publication.
+5. `MAX(CASE WHEN ...)` pivots require unique fact keys. The fresh load confirmed zero duplicate full-source rows and zero proposed fact-key collisions across all six workbooks.
+6. `python/ingestion/load_tac_data.py` classifies CY/PY from MainCode and now resolves providers through deterministic normalised keys plus two reviewed aliases. The fresh run found zero ambiguous, duplicate or unmatched provider mappings.
+7. Database scripts now require an environment-supplied password. Any password exposed by earlier history should still be rotated.
+8. `v_kpis.sql` now applies parentheses consistently around the EBITDA numerator. Its RAG thresholds remain illustrative project bands rather than NHS regulatory ratings.
 
-These observations were verified from repository source files; no live database access was available.
+These observations originated from repository review. A subsequent fresh MySQL run loaded 2,210,974
+facts for 215 trusts and confirmed complete three-statement coverage across 633 trust-years. Four
+SoFP-to-SoCF closing-cash residuals exceed £1k and remain documented exceptions.
+
+| Provider/year exception | Closing-cash residual (£000) |
+|---|---:|
+| Cambridge University Hospitals NHS Foundation Trust — 2021/22 | 134.65240 |
+| Royal Cornwall Hospitals NHS Trust — 2022/23 | 3.00000 |
+| Royal Cornwall Hospitals NHS Trust — 2023/24 | 5.00000 |
+| Tees, Esk and Wear Valleys NHS Foundation Trust — 2023/24 | 269.99410 |
 
 ## 5. Reconciliation workpaper template
 
@@ -122,11 +133,11 @@ The final query intentionally surfaces duplicates for review: do not automatical
 
 ## 7. Required completion criteria
 
-- [ ] Obtain six original annual NHS England TAC spreadsheets for the three financial years and document filenames, source URLs, versions and checksums.
+- [x] Load and checksum the six annual TAC spreadsheets for the three financial years; source URLs and publication metadata remain documented separately.
 - [ ] Confirm the exact NHS provider population per year and reconcile organisational changes, omissions and filters.
 - [ ] Confirm `SCI0140A`, `SCI0240` and other relevant TAC definitions and their sign conventions.
-- [ ] Re-run ingestion, check `CY` selection, duplicate keys, organisational mappings and missing measures.
-- [ ] Export per-provider, per-year components and join against the published basis.
+- [x] Re-run ingestion and verify `CY` selection, duplicate keys, organisational mappings and missing statement measures.
+- [x] Export per-provider, per-year SoCI, SoFP, SoCF and statement-reconciliation components.
 - [ ] Obtain official consolidation/inter-provider/charitable adjustment amounts from the annual reports and reconcile the statutory lines.
 - [ ] Explain every material variance and year-on-year accounting-policy difference.
 - [ ] Reconcile the deficit flag to the **same** official measure and provider population.
