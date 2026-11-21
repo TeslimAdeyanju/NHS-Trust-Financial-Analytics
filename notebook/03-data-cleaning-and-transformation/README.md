@@ -2,9 +2,10 @@
 
 **Implementation:** Quality checks, source standardisation and conforming into Silver dimensions/facts.
 
-> `nhs_bronze` — populated by `python/ingestion/load_tac_data.py`. This stage's only job is to get the
-> Excel data into a queryable form with the *minimum* transformation applied. No joins, no pivoting, no
-> business logic — a faithful, query-able landing zone for exactly what NHS England published.
+> `nhs_bronze` — populated by `python/ingestion/load_tac_data.py`. This stage lands the Excel data in a
+> queryable form with the *minimum* transformation applied — no joins, no pivoting, no business logic —
+> and runs the source quality gate that must pass before anything is written. Promotion into the Silver
+> star schema is [stage ④](../04-data-modelling-and-analytics/README.md).
 
 ---
 
@@ -46,9 +47,9 @@ CREATE DATABASE IF NOT EXISTS nhs_gold;   -- analytical views — see stage ④
 
 | `nhs_bronze`                                 | `nhs_silver` / `nhs_gold`                         |
 |---------------------------------------------|--------------------------------------------------|
-| Holds data exactly as it arrived            | Holds cleaned, conformed analytics data + views  |
-| Safe to delete-and-reload at any time       | Never truncated — accumulates across all six files |
-| No foreign keys — accepts anything           | Has foreign keys — enforces integrity            |
+| Holds data exactly as it arrived (CY, PY, blanks) | Holds cleaned, conformed analytics data + views  |
+| Each reload replaces only its own `(financial_year, trust_type)` scope | Never truncated — each reload replaces only its own scope, in one transaction |
+| No foreign keys — integrity is checked by `validate()` before writing | Has foreign keys — enforces integrity            |
 | Used only during ingestion                   | Used by views, exports, Power BI                 |
 
 If a load looks wrong, `nhs_bronze` tells you whether the fault is in what NHS England published or in the
@@ -130,27 +131,35 @@ The source gate runs before any staging or fact write:
 | Normalised provider key maps to multiple ODS codes | CRITICAL — halts the load | The mapping is ambiguous |
 | Populated CY row has no provider mapping | CRITICAL — halts the load | Financial rows must never disappear at the ODS join |
 
-**Rule:** halt on problems that cannot be recovered from downstream; warn on problems that can.
+**Rule:** every source-gate check is critical. If a row can't be traced, de-duplicated or mapped to an ODS
+code, the whole file is rejected before any write, and the failure is recorded as `FAILED` in
+`nhs_bronze.import_batch`. There are no warn-and-continue checks at this stage.
 
 ---
 
 ## `load_staging()` — Write to `nhs_bronze`
 
 ```python
-# DELETE existing data for this year/type first (idempotent)
-conn.execute(text(
-    "DELETE FROM stg_tac_raw WHERE financial_year = :fy AND trust_type = :tt"
-), {"fy": financial_year, "tt": trust_type})
+with engine.begin() as conn:   # one transaction: both tables replaced together, or neither
+    # DELETE existing data for this year/type first (idempotent)
+    conn.execute(text(
+        "DELETE FROM stg_tac_raw WHERE financial_year = :fy AND trust_type = :tt"
+    ), {"fy": financial_year, "tt": trust_type})
+    conn.execute(text(
+        "DELETE FROM stg_provider_list WHERE financial_year = :fy AND trust_type = :tt"
+    ), {"fy": financial_year, "tt": trust_type})
 
-# Then INSERT fresh data
-data_df.to_sql("stg_tac_raw", engine, if_exists="append", index=False, chunksize=2000)
+    # Then INSERT fresh data
+    provider_df.to_sql("stg_provider_list", conn, if_exists="append", index=False, chunksize=500)
+    data_df.to_sql("stg_tac_raw", conn, if_exists="append", index=False, chunksize=2000)
 ```
 
 Staging is a buffer, not a permanent store — re-running the pipeline for a corrected file should replace
 old data, not accumulate duplicates. The DELETE is scoped to `(financial_year, trust_type)`, so reloading
-one file never touches another file's rows. `chunksize=2000` matters because pandas' `to_sql()` builds one
-`INSERT` per chunk — without it, a 241K-row single INSERT exceeds MySQL's `max_allowed_packet` and the
-load crashes.
+one file never touches another file's rows, and because both tables share one transaction a failed load
+leaves the previous version intact. `chunksize=2000` matters because pandas' `to_sql()` builds one
+`INSERT` per chunk — without it, a single INSERT of up to 1M rows (staging now keeps CY and PY) exceeds
+MySQL's `max_allowed_packet` and the load crashes.
 
 ---
 
@@ -174,6 +183,7 @@ CREATE TABLE stg_tac_raw (
     year_type         CHAR(2)         NOT NULL,   -- CY | PY
     load_ts           TIMESTAMP       DEFAULT CURRENT_TIMESTAMP,
     INDEX idx_stg_org_year  (organisation_name(100), financial_year),
+    INDEX idx_stg_provider_key (provider_name_key(100), financial_year, trust_type),
     INDEX idx_stg_sub_code  (sub_code),
     INDEX idx_stg_year_type (financial_year, year_type)
 ) ENGINE=InnoDB;
@@ -198,14 +208,15 @@ within the same year *and* file type.
 | Three databases | `nhs_bronze` buffer + `nhs_silver` conformed + `nhs_gold` views | Separates raw, clean, and curated; staging is safe to reload |
 | `float` dtype for `Total` | NaN-safe read, then round to five decimals | Preserves 131,858 genuine fractional £000 amounts |
 | CY/PY classification | Preserve both in Bronze; promote populated CY rows only | Retains source evidence while preventing double-counting in Silver |
-| Validate before write | Critical → halt; Warning → log and continue | Catch unrecoverable problems before any row lands |
-| DELETE + INSERT in staging | Scoped to `(financial_year, trust_type)` | Idempotent reloads without touching other files' rows |
-| No FK, no UNIQUE KEY on `stg_tac_raw` | Staging accepts anything NHS England published | Integrity is enforced one stage later, in `fct_tac` |
+| Validate before write | Every source-gate check is critical and halts the file | No partially trusted file ever lands |
+| DELETE + INSERT in staging | Scoped to `(financial_year, trust_type)`, one transaction | Idempotent reloads without touching other files' rows |
+| No FK, no UNIQUE KEY on `stg_tac_raw` | Staging preserves every source row (CY, PY, blanks); `validate()` rejects duplicates before writing | Source evidence is kept; key integrity is enforced again in `fct_tac` |
 
-## Verified validation results — 29 October 2026
+## Verified validation results — 29 October 2026, reproduced 21 November 2026
 
 The completed run produced 2,210,974 Silver facts and 215 trust dimension rows. The post-load validation
-report recorded **18 passed checks, one non-critical warning and zero critical failures**:
+report recorded **18 passed checks, one non-critical warning and zero critical failures**. A from-scratch
+rebuild on 21 November 2026 produced an identical report:
 
 - all three expected financial years were present;
 - no null organisation codes, duplicate fact keys or orphan provider codes were found;
@@ -234,5 +245,5 @@ before-impairments-and-transfers measure.
 
 ---
 
-*Previous: [Stage ② — Raw Excel Files](../02-data-ingestion/README.md)*
-*Next: [Stage ④ — MySQL Analytics](../04-data-modelling-and-analytics/README.md)*
+*Previous: [Stage ② — Data Ingestion](../02-data-ingestion/README.md)*
+*Next: [Stage ④ — Data Modelling & Analytics](../04-data-modelling-and-analytics/README.md)*

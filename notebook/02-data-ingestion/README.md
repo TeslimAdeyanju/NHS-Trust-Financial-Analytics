@@ -1,6 +1,6 @@
 # Stage 2: Data Ingestion
 
-**Implementation:** Original Excel workbooks saved to data/raw/; Python acquisition and landing in Bronze staging.
+**Implementation:** Original Excel workbooks downloaded manually to `data/raw/`; Python reads them and lands them in Bronze staging.
 
 > This stage is about understanding the exact shape of the data before any code runs. The Python
 > pipeline receives these files and has to deal with exactly what NHS England published — no cleaning,
@@ -24,8 +24,9 @@ data/raw/
 structure, different populations. The pipeline treats them identically — the filename tells the code
 which type it is.
 
-**Why are they large?** Long/narrow format — 10,000+ rows per trust. 66 trusts × ~7,000 rows ≈ 481,000
-rows in an NHS Trusts file alone.
+**Why are they large?** Long/narrow format — roughly 7,000 rows per listed provider, covering both the
+current year and the prior-year comparison. The 2023/24 NHS Trusts file alone has 481,140 rows for 68
+listed providers.
 
 **The illustrative file** (`TAC_illustrative_2023-24.xlsx`) is a reference schema file showing every
 SubCode and its description, not real trust data. The pipeline explicitly skips it:
@@ -61,16 +62,19 @@ rows in the verified files). Not every listed provider necessarily has populated
 this sheet resolves that gap. The source also includes authorisation dates, but the current pipeline does
 not load that field; it carries the provider name, ODS code, region, and sector into staging.
 
-The pipeline keeps only rows where `org_code` is exactly 3 characters:
+The pipeline keeps only rows with a name and an `org_code` of exactly 3 letters or digits:
 
 ```python
-df = df[df["org_code"].str.len() == 3]   # drops blank rows, header artefacts
+df = df[
+    df["org_code"].str.fullmatch(r"[A-Za-z0-9]{3}", na=False)   # drops blank rows, header artefacts
+    & df["organisation_name"].ne("")
+]
 ```
 
 ### Sheet 2 — "All data"
 
-The main data sheet: ~481,000 rows (NHS Trusts file) or ~1.1M rows (Foundation Trusts file), long/narrow,
-exactly 7 columns. Each row is one reported amount: the trust and TAC schedule identify the context,
+The main data sheet: about 433,000–481,000 rows per NHS Trusts file and 884,000–1,006,000 per Foundation
+Trusts file (the rows preserved in Bronze in the verified run), long/narrow, exactly 7 columns. Each row is one reported amount: the trust and TAC schedule identify the context,
 `TableID` and `MainCode` locate the source table and column, and `RowNumber` and `SubCode` identify the
 line item.
 
@@ -102,9 +106,11 @@ add a category suffix, such as `P` for permanent staff in `A09CY01P`.
 
 In the original TAC table, `SubCode` labels the line and `MainCode` labels the value column; "All data"
 flattens their intersection into one record. In the screenshot, `A02PY01` marks the prior-year comparison
-column alongside `A02CY01`. Because this is the 2021/22 workbook, its PY values are for 2020/21. The
-pipeline drops PY rows and keeps CY rows to avoid counting comparison years again when workbooks are
-combined. The filter runs during [stage ③](../03-data-cleaning-and-transformation/README.md).
+column alongside `A02CY01`. Because this is the 2021/22 workbook, its PY values are for 2020/21. Both
+CY and PY rows are kept in Bronze as source evidence ([stage ③](../03-data-cleaning-and-transformation/README.md));
+only populated CY rows are promoted to the Silver fact table
+([stage ④](../04-data-modelling-and-analytics/README.md)), so comparison years are never counted twice
+when workbooks are combined.
 
 ---
 
@@ -165,9 +171,10 @@ else happens. Rename a file and the pipeline mis-tags every row inside it — th
 | PY rows mixed with CY rows | Preserve both in Bronze; filter to CY only during Silver promotion |
 | Genuine fractional £000 amounts | Round only to the source's five-decimal precision and store as `DECIMAL(18,5)`; never coerce to whole thousands |
 
-## Verified ingestion run — 29 October 2026
+## Verified ingestion run — 29 October 2026, reproduced 21 November 2026
 
-The six production workbooks were loaded into a freshly rebuilt MySQL environment. `source_rows` is the
+The six production workbooks were loaded into a freshly rebuilt MySQL environment. A second from-scratch
+rebuild on 21 November 2026 produced identical counts and an identical fact table, row for row. `source_rows` is the
 number preserved in Bronze after identifying-field checks; `fact_candidate_rows` is the populated CY
 population promoted to Silver.
 
@@ -183,8 +190,9 @@ population promoted to Silver.
 
 The difference between provider-list rows and providers with populated facts is not an unmatched join:
 all populated CY rows resolved successfully. It reflects provider-list entries without populated CY facts
-in those files. Across the six workbooks, 131,858 populated amounts contained genuine fractional £000
-values, which is why the warehouse uses five-decimal storage.
+in those files. Across the six workbooks, 131,858 populated amounts (CY and PY) contained genuine
+fractional £000 values, 67,357 of them in the promoted CY facts, which is why the warehouse uses
+five-decimal storage.
 
 Every file finished with `LOADED` status in `nhs_bronze.import_batch`, carrying its filename, SHA-256,
 row counts and integrity results.
@@ -209,12 +217,12 @@ row counts and integrity results.
 
 | File | What to Read |
 |------|-------------|
-| [data/raw/](../data/raw/) | Open any TAC `.xlsx` in Excel — examine both sheets directly |
-| [agent_docs/data_dictionary.md](../agent_docs/data_dictionary.md) | Full SubCode reference, MainCode format, data-quality notes |
+| `data/raw/` (git-ignored, local only) | Open any TAC `.xlsx` in Excel — examine both sheets directly |
+| [agent_docs/data_dictionary.md](../../agent_docs/data_dictionary.md) | Full SubCode reference, MainCode format, data-quality notes |
 | [PROJECT_DOCUMENTATION.md](../../PROJECT_DOCUMENTATION.md), stage ② | The narrative version, plus the "how I sourced the data" story |
 | [python/ingestion/load_tac_data.py](../../python/ingestion/load_tac_data.py) | `filename_to_financial_year()`, `filename_to_trust_type()`, `read_provider_list()`, `read_all_data()` |
 
 ---
 
-*Previous: [Stage ① — NHS England (Source)](../01-data-sourcing/README.md)*
-*Next: [Stage ③ — MySQL Staging](../03-data-cleaning-and-transformation/README.md)*
+*Previous: [Stage ① — Data Sourcing](../01-data-sourcing/README.md)*
+*Next: [Stage ③ — Data Cleaning & Transformation](../03-data-cleaning-and-transformation/README.md)*

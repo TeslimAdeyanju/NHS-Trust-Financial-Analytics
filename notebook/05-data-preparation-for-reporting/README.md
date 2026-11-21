@@ -118,9 +118,12 @@ sector-level sums in £000s run to eight figures and stop being readable on a be
 
 Full column-by-column schema for each file is in `PROJECT_DOCUMENTATION.md`, stage ⑤.
 
-## Verified reporting outputs — 29 October 2026
+## Verified reporting outputs — 29 October 2026, reproduced 21 November 2026
 
-The completed export produced all thirteen reporting files successfully:
+The completed export produced all thirteen reporting files successfully. A from-scratch rebuild on
+21 November 2026 produced the same row counts and identical amounts; the only differences were
+`organisation_name` values for six trusts, now taken from their latest year (see
+[stage ④](../04-data-modelling-and-analytics/README.md)):
 
 | Output group | Files | Verified rows |
 |---|---|---:|
@@ -162,5 +165,5 @@ rows.
 
 ---
 
-*Previous: [Stage ④ — MySQL Analytics](../04-data-modelling-and-analytics/README.md)*
-*Next: [Stage ⑥ — Power BI Dashboard](../06-data-visualisation-and-insights/README.md)*
+*Previous: [Stage ④ — Data Modelling & Analytics](../04-data-modelling-and-analytics/README.md)*
+*Next: [Stage ⑥ — Data Visualisation & Insights](../06-data-visualisation-and-insights/README.md)*

@@ -33,8 +33,7 @@ reference point independent of anything in this repository.
 
 ## The Money and Year Conventions, Set Once Here
 
-Two conventions established at the source apply to every table, column, and file downstream, without
-exception:
+Two conventions established at the source apply to every table, column, and file downstream:
 
 - **Financial year:** 1 April – 31 March, labelled `YYYY/YY` (e.g. `2023/24`). Every filter in every SQL
   view, every Python script, and every DAX measure in this project uses `financial_year` — never a
@@ -42,13 +41,16 @@ exception:
 - **Currency:** every monetary figure NHS England publishes is in **£ thousands (£000s)**. This project
   keeps that unit all the way through SQL and CSV, and converts to £m only at the very last step — inside
   DAX measures on import into Power BI (see [stage ⑥](../06-data-visualisation-and-insights/README.md)).
-  £000 does not imply whole numbers: the verified sources contain values to five decimal places.
+  There is one deliberate exception: `sector_benchmarks.csv` is pre-aggregated in £m (see
+  [stage ⑤](../05-data-preparation-for-reporting/README.md)). £000 does not imply whole numbers: the
+  verified sources contain values to five decimal places.
 
-## Verified source manifest — 29 October 2026
+## Verified source manifest — 29 October 2026, reproduced 21 November 2026
 
-These are the exact production workbook bytes used by the completed source-to-report run. The workbooks
-are git-ignored, so a future reproduction should calculate SHA-256 before loading and compare it with this
-manifest rather than relying on filenames alone.
+These are the exact production workbook bytes used by the completed source-to-report run. A from-scratch
+rebuild on 21 November 2026 recorded the same six hashes. The workbooks are git-ignored, so a future
+reproduction should calculate SHA-256 before loading and compare it with this manifest rather than relying
+on filenames alone.
 
 | Workbook | Approx. size | SHA-256 |
 |---|---:|---|
@@ -81,4 +83,4 @@ something to clean in place.
 
 ---
 
-*Next: [Stage ② — Raw Excel Files](../02-data-ingestion/README.md)*
+*Next: [Stage ② — Data Ingestion](../02-data-ingestion/README.md)*

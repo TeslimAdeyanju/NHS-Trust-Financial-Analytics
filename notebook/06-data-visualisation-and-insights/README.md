@@ -4,10 +4,11 @@
 
 > Imports the thirteen CSVs from [stage ⑤](../05-data-preparation-for-reporting/README.md) (or connects directly to
 > [stage ④](../04-data-modelling-and-analytics/README.md) via DirectQuery), builds the model relationships and DAX
-> measures below, and renders five report pages. This is the only stage a non-technical end user — a
-> finance director, a board — actually interacts with; there is no code to run here, only a model to
-> build inside Power BI Desktop, which is why this stage's "code" lives in `.md`/`.tmdl` files rather
-> than a script.
+> measures below, and is specified to render five report pages. This is the only stage a non-technical end
+> user — a finance director, a board — actually interacts with; there is no code to run here, only a model
+> to build inside Power BI Desktop, which is why this stage's "code" lives in `.md`/`.tmdl` files rather
+> than a script. No `.pbix` is checked in and the report is not yet published, so the pages below are a
+> specification, not screenshots of a finished report.
 
 ---
 
@@ -121,7 +122,9 @@ Two versions of every measure exist, and only one is authoritative if they ever 
 
 ---
 
-## Report Pages
+## Report Pages (specified, publication pending)
+
+Full visual-by-visual specifications are in [power_bi/setup_guide.md](../../power_bi/setup_guide.md).
 
 | Page | Purpose |
 |------|---------|
@@ -170,4 +173,4 @@ Red (unsustainable):  #DA291C     Grey (no data):  #E8EDEE
 
 ---
 
-*Previous: [Stage ⑤ — CSV Exports](../05-data-preparation-for-reporting/README.md)*
+*Previous: [Stage ⑤ — Data Preparation for Reporting](../05-data-preparation-for-reporting/README.md)*

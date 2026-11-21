@@ -43,7 +43,8 @@ in dependency order, ending with
 residuals. Cross-year comparisons and ratios require consistent denominators and confirmed sign
 conventions.
 
-The SQL views were executed against the freshly populated MySQL database for all 633 trust-years. SoCI,
+The SQL views were executed against the freshly populated MySQL database for all 633 trust-years (first on
+29 October 2026; a from-scratch rebuild on 21 November 2026 gave identical results). SoCI,
 SoFP and SoCF residuals are within £1k; four SoFP-to-SoCF closing-cash exceptions exceed £1k, with a
 maximum of £269.9941k. The accounting interpretation therefore remains preliminary pending resolution of
 those exceptions: [financial reconciliation workpaper](../../reports/nhs_financial_reconciliation.md).
@@ -63,25 +64,44 @@ accounting cause is evidenced.
 
 ## `populate_dim_trust()` — Slowly Changing Dimension, Type 1
 
+`populate_dim_trust(financial_year, trust_type)` reads only the providers for the file currently loading,
+then upserts them:
+
 ```sql
 INSERT INTO dim_trust (org_code, organisation_name, trust_type, sector, region, is_foundation,
                         first_year_seen, last_year_seen)
 VALUES (...)
 ON DUPLICATE KEY UPDATE
-    last_year_seen = VALUES(last_year_seen),
-    sector         = COALESCE(VALUES(sector), sector),
-    region         = COALESCE(VALUES(region), region),
-    updated_ts     = CURRENT_TIMESTAMP;
+    -- descriptive attributes: take the incoming value only if this year is the latest seen
+    organisation_name = IF(VALUES(last_year_seen) >= COALESCE(last_year_seen, ''),
+                           VALUES(organisation_name), organisation_name),
+    trust_type        = IF(... same test ..., VALUES(trust_type), trust_type),
+    is_foundation     = IF(... same test ..., VALUES(is_foundation), is_foundation),
+    sector            = IF(... same test ..., COALESCE(VALUES(sector), sector), sector),
+    region            = IF(... same test ..., COALESCE(VALUES(region), region), region),
+    -- year range: only ever widens
+    first_year_seen   = LEAST(COALESCE(first_year_seen, VALUES(first_year_seen)), VALUES(first_year_seen)),
+    last_year_seen    = GREATEST(COALESCE(last_year_seen, VALUES(last_year_seen)), VALUES(last_year_seen)),
+    updated_ts        = CURRENT_TIMESTAMP;
 ```
 
-This overwrites rather than versions — a Type 1 SCD, not Type 2. Two deliberate asymmetries in what the
-`UPDATE` clause touches:
+This overwrites rather than versions — a Type 1 SCD, not Type 2: one row per ODS code, showing the trust
+as it was in the latest year it appears. Three things about it are deliberate:
 
-- `last_year_seen` is always moved forward to the year currently loading
-- `first_year_seen` is **not** in the `UPDATE` clause at all, so it's set once on first `INSERT` and never
-  touched again — the pipeline's record of when a trust first entered the dataset
-- `COALESCE(VALUES(sector), sector)` — if the incoming file has a null sector for some reason, the
-  existing value is kept rather than overwritten with a blank
+- **It doesn't depend on load order.** Files load in filename order — all Foundation Trust years, then
+  all NHS Trust years — not chronologically. `LEAST`/`GREATEST` mean the year range can only widen, and
+  the "is this the latest year?" test means an older file can never overwrite newer details. Loading the
+  six files in reverse gives an identical table.
+- **Renamed trusts show their current name.** Three trusts were renamed under the same ODS code in this
+  period — `RQX` Homerton University Hospital → Homerton Healthcare, `RH8` Royal Devon and Exeter → Royal
+  Devon University Healthcare, `RBN` St Helens and Knowsley → Mersey and West Lancashire. NHS England also
+  changes capitalisation between years ("Maidstone And Tunbridge Wells"); the latest spelling wins.
+- **Order of assignments matters.** MySQL evaluates the `UPDATE` assignments left to right, and later ones
+  see earlier updates, so every "is this the latest year?" test runs before `last_year_seen` itself moves.
+  `COALESCE(VALUES(sector), sector)` keeps an existing value if a newer file has a blank.
+
+Trusts that closed keep their final year: The Pennine Acute Hospitals and North West Boroughs end at
+2021/22; Yeovil District Hospital and Northern Devon Healthcare end at 2022/23.
 
 ## `promote_to_fact()` — The Critical Join
 
@@ -95,6 +115,8 @@ JOIN stg_provider_list p
    AND  r.financial_year    = p.financial_year
    AND  r.trust_type        = p.trust_type
 WHERE r.financial_year = :fy AND r.trust_type = :tt
+  AND r.year_type = 'CY'          -- PY comparison rows stay in Bronze only
+  AND r.total IS NOT NULL         -- blank amounts stay in Bronze only; zeros are promoted
 ```
 
 The deterministic `provider_name_key` normalises case, punctuation and whitespace, then applies two
@@ -113,22 +135,27 @@ for ws_name in stg_sheets["worksheet_name"]:
     """), {"ws": ws_name})
 ```
 
-`dim_worksheet` is now seeded with all **31** distinct worksheet names that actually appear in the raw
-files, properly titled and categorised (the original DDL only seeded 19 and left the other 12 to self-heal
-with a placeholder title and `category = 'OTHER'`). The self-healing step still runs on every load as a
-safety net rather than a crutch: rather than let the `worksheet_name → dim_worksheet` foreign key on
-`fct_tac` reject a row the DDL author didn't happen to seed, `promote_to_fact()` self-heals the dimension
-first, via `INSERT IGNORE` so it's a no-op if the row already exists. This is a defensive pattern worth
-calling out on its own: a dimension table doesn't have to be perfectly pre-seeded to be safe to enforce a
-foreign key against, provided the promotion step is prepared to extend it — worth keeping even now that the
-seed list is complete, in case NHS England adds a schedule in a future year's file.
+The DDL seeds **28** worksheets with proper titles and categories (the original seeded 19). On the verified
+load, four more were self-healed with a placeholder title and `category = 'OTHER'` — `TAC00 - IFRS 16
+Transition`, `TAC10 Op leases`, `TAC10X IAS 17 comparatives` and `TAC23 Reval Res` — giving **32** rows.
+**30** of them carry current-year facts; `TAC10X IAS 17 comparatives` and `TAC14X RoU Assets PY` are
+comparative-only schedules with no CY rows. Rather than let the `worksheet_name → dim_worksheet` foreign
+key on `fct_tac` reject a row the DDL author didn't happen to seed, `promote_to_fact()` self-heals the
+dimension first, via `INSERT IGNORE` so it's a no-op if the row already exists. This is a defensive
+pattern worth calling out on its own: a dimension table doesn't have to be perfectly pre-seeded to be safe
+to enforce a foreign key against, provided the promotion step is prepared to extend it. Adding the four
+placeholder schedules to the DDL seed, with real titles, is an open tidy-up; the self-heal stays as the
+safety net for any schedule NHS England adds in a future year.
 
 **Step C — atomically replace the current source scope, then UPSERT in chunks:**
 
 ```python
-for start in range(0, len(fact_df), 1000):
-    chunk = fact_df.iloc[start: start + 1000]
-    conn.execute(upsert_sql, chunk.to_dict(orient="records"))
+with silver_engine.begin() as conn:   # one transaction for the delete and every chunk
+    conn.execute(text("DELETE FROM fct_tac WHERE financial_year = :fy AND trust_type = :tt"),
+                 {"fy": financial_year, "tt": trust_type})
+    for start in range(0, len(fact_df), 1000):
+        chunk = fact_df.iloc[start: start + 1000]
+        conn.execute(upsert_sql, chunk.to_dict(orient="records"))
 ```
 
 ```sql
@@ -136,10 +163,12 @@ INSERT INTO fct_tac (org_code, financial_year, worksheet_name, table_id,
                       main_code, sub_code, total_000s, trust_type, source_file, source_sha256)
 VALUES (...)
 ON DUPLICATE KEY UPDATE
-    total_000s  = VALUES(total_000s),
-    source_file   = VALUES(source_file),
-    source_sha256 = VALUES(source_sha256),
-    load_ts     = CURRENT_TIMESTAMP;
+    worksheet_name = VALUES(worksheet_name),
+    table_id       = VALUES(table_id),
+    total_000s     = VALUES(total_000s),
+    source_file    = VALUES(source_file),
+    source_sha256  = VALUES(source_sha256),
+    load_ts        = CURRENT_TIMESTAMP;
 ```
 
 Chunked because `to_sql()` — used for the simpler staging load — doesn't support
@@ -163,13 +192,13 @@ counts, while `source_sha256` records the exact workbook content used.
 ## The Star Schema
 
 <p align="center">
-<img src="../docs/images/star_schema.png" width="560" alt="Entity relationship diagram from DbVisualizer: fct_tac has three enforced foreign keys — org_code (to dim_trust), financial_year (to dim_financial_year), and worksheet_name (to dim_worksheet). dim_subcode.worksheet_name also has its own foreign key to dim_worksheet.worksheet_name. sub_code on fct_tac remains unconstrained by design, joining to dim_subcode." />
+<img src="../../docs/images/star_schema.png" width="560" alt="Entity relationship diagram from DbVisualizer: fct_tac has three enforced foreign keys — org_code (to dim_trust), financial_year (to dim_financial_year), and worksheet_name (to dim_worksheet). dim_subcode.worksheet_name also has its own foreign key to dim_worksheet.worksheet_name. sub_code on fct_tac remains unconstrained by design, joining to dim_subcode." />
 </p>
 
 `fct_tac` is the centre — one row per `(org_code, financial_year, main_code, sub_code)`. Three enforced
 foreign keys: `org_code → dim_trust`, `financial_year → dim_financial_year`, `worksheet_name →
 dim_worksheet`. `sub_code` stays deliberately unconstrained: even though `dim_subcode` now carries **1,000
-rows** — every SubCode across all 31 real TAC worksheets, generated by
+rows** — every SubCode across the 27 worksheets of NHS England's illustrative TAC workbook, generated by
 `python/ingestion/build_subcode_reference.py` from NHS England's own illustrative TAC workbook (see
 [stage ①](../01-data-sourcing/README.md)) rather than the 59 hand-curated rows the project started with —
 a direct FK from `fct_tac.sub_code` would still be one NHS England schema revision away from blocking a
@@ -296,6 +325,7 @@ narrower views (including `v_profit_and_loss`/`v_balance_sheet`) separately inst
 | Concept | Design Decision | Why |
 |---------|------------------|-----|
 | Scoped fact replacement plus UPSERT | Delete only the current `(financial_year, trust_type)` inside one transaction | Removes stale facts without touching the other five source scopes |
+| Order-independent `dim_trust` upsert | Year range widens with `LEAST`/`GREATEST`; attributes from the latest year | Files don't load chronologically; renamed trusts show their current name |
 | Self-healing `dim_worksheet` | `INSERT IGNORE` before the join | The FK must never block a row for an under-seeded dimension — now a safety net, not a crutch |
 | No FK from `fct_tac` to `dim_subcode` | Even at 1,000 seeded rows, a future NHS England schema change could still add an unseeded code | Enforced one join away instead, on a much smaller table |
 | `MAX(CASE WHEN sub_code = ... )` pivot idiom | Every `v_*` view, including `v_profit_and_loss`/`v_balance_sheet` | Turns EAV rows into named columns without changing the fact table |
@@ -317,5 +347,5 @@ narrower views (including `v_profit_and_loss`/`v_balance_sheet`) separately inst
 
 ---
 
-*Previous: [Stage ③ — MySQL Staging](../03-data-cleaning-and-transformation/README.md)*
-*Next: [Stage ⑤ — CSV Exports](../05-data-preparation-for-reporting/README.md)*
+*Previous: [Stage ③ — Data Cleaning & Transformation](../03-data-cleaning-and-transformation/README.md)*
+*Next: [Stage ⑤ — Data Preparation for Reporting](../05-data-preparation-for-reporting/README.md)*
