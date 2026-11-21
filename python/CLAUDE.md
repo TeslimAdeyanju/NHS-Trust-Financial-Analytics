@@ -1,7 +1,9 @@
 # Python Layer — Pipeline Conventions
 
-This describes the five scripts under `python/` — four pipeline stages plus one reference-data generator
-(`build_subcode_reference.py`, not part of the daily pipeline).
+This describes the scripts under `python/`: four pipeline stages, one reference-data generator
+(`build_subcode_reference.py`, not part of the daily pipeline), and `ingestion/source_integrity.py`, a
+pure-pandas helper module (provider-name normalisation and aliases, file SHA-256, source validation counts)
+that `load_tac_data.py` imports and `tests/` exercises without a database.
 
 ## Environment
 
@@ -19,7 +21,7 @@ python/
 │   └── build_subcode_reference.py  # NHS illustrative TAC workbook → dim_subcode label seed (one-off, not in the pipeline)
 ├── transformation/
 │   ├── transform_tac_data.py    # Enrichment: sector flags, YoY, income mix, sector benchmarks — stage ④
-│   └── validate_tac_data.py     # 11 data-quality checks → data/processed/validation_report.csv — stage ④
+│   └── validate_tac_data.py     # 12 check functions (19 result rows) → data/processed/validation_report.csv — stage ④
 └── reporting/
     └── export_for_powerbi.py    # nhs_gold views + nhs_silver dims → 13 CSVs in data/processed/powerbi_export/ — stage ⑤
 ```

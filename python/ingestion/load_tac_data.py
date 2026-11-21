@@ -367,8 +367,9 @@ def populate_dim_trust(financial_year: str, trust_type: str) -> None:
     stg_engine    = get_engine(STG_DB)
     silver_engine = get_engine(SILVER_DB)
 
+    # Only this file's providers: staging keeps every year/type loaded so far.
     providers = pd.read_sql(
-        "SELECT DISTINCT org_code, organisation_name, sector, region, source_file, financial_year "
+        "SELECT DISTINCT org_code, organisation_name, sector, region, trust_type "
         "FROM stg_provider_list "
         "WHERE financial_year = %(fy)s AND trust_type = %(tt)s "
         "AND LENGTH(TRIM(org_code)) = 3",
@@ -379,11 +380,17 @@ def populate_dim_trust(financial_year: str, trust_type: str) -> None:
         log.warning("  No providers found in staging — skipping dim_trust")
         return
 
-    providers["trust_type"]   = providers["source_file"].apply(
-        lambda f: "FOUNDATION_TRUST" if "foundation" in f.lower() else "NHS_TRUST"
-    )
-    providers["is_foundation"] = (providers["trust_type"] == "FOUNDATION_TRUST").astype(int)
+    providers["is_foundation"]  = (providers["trust_type"] == "FOUNDATION_TRUST").astype(int)
+    providers["financial_year"] = financial_year
+    providers = providers.astype(object).where(providers.notna(), None)   # NaN → SQL NULL
 
+    # Order-independent upsert. Files load in filename order (all FT years, then
+    # all NHS Trust years), not chronologically, so: first/last_year_seen only
+    # widen (LEAST/GREATEST), and descriptive attributes take the value from the
+    # latest year seen — a renamed trust or an FT conversion shows its current form.
+    # MySQL evaluates these assignments left to right and later ones see earlier
+    # updates, so the "is this year >= last_year_seen" tests must come before
+    # last_year_seen itself is updated.
     upsert_sql = text("""
         INSERT INTO dim_trust
             (org_code, organisation_name, trust_type, sector, region, is_foundation,
@@ -392,23 +399,25 @@ def populate_dim_trust(financial_year: str, trust_type: str) -> None:
             (:org_code, :organisation_name, :trust_type, :sector, :region, :is_foundation,
              :financial_year, :financial_year)
         ON DUPLICATE KEY UPDATE
-            last_year_seen   = VALUES(last_year_seen),
-            sector           = COALESCE(VALUES(sector), sector),
-            region           = COALESCE(VALUES(region), region),
-            updated_ts       = CURRENT_TIMESTAMP
+            organisation_name = IF(VALUES(last_year_seen) >= COALESCE(last_year_seen, ''),
+                                   VALUES(organisation_name), organisation_name),
+            trust_type        = IF(VALUES(last_year_seen) >= COALESCE(last_year_seen, ''),
+                                   VALUES(trust_type), trust_type),
+            is_foundation     = IF(VALUES(last_year_seen) >= COALESCE(last_year_seen, ''),
+                                   VALUES(is_foundation), is_foundation),
+            sector            = IF(VALUES(last_year_seen) >= COALESCE(last_year_seen, ''),
+                                   COALESCE(VALUES(sector), sector), sector),
+            region            = IF(VALUES(last_year_seen) >= COALESCE(last_year_seen, ''),
+                                   COALESCE(VALUES(region), region), region),
+            first_year_seen   = LEAST(COALESCE(first_year_seen, VALUES(first_year_seen)),
+                                      VALUES(first_year_seen)),
+            last_year_seen    = GREATEST(COALESCE(last_year_seen, VALUES(last_year_seen)),
+                                         VALUES(last_year_seen)),
+            updated_ts        = CURRENT_TIMESTAMP
     """)
 
     with silver_engine.begin() as conn:
-        for _, row in providers.iterrows():
-            conn.execute(upsert_sql, {
-                "org_code":          row["org_code"],
-                "organisation_name": row["organisation_name"],
-                "trust_type":        row["trust_type"],
-                "sector":            row.get("sector"),
-                "region":            row.get("region"),
-                "is_foundation":     int(row["is_foundation"]),
-                "financial_year":    financial_year,
-            })
+        conn.execute(upsert_sql, providers.to_dict(orient="records"))
 
     log.info("  Upserted %d rows → nhs_silver.dim_trust", len(providers))
 

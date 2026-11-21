@@ -5,8 +5,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## What this project is
 
 An end-to-end financial analytics pipeline built on **real NHS England Trust Accounts Consolidation (TAC)
-data**: 6 Excel source files → MySQL → SQL analytical views → CSV export for Power BI. It covers 206 NHS
-Trusts/Foundation Trusts across financial years 2021/22–2023/24. See [README.md](README.md) for headline
+data**: 6 Excel source files → MySQL → SQL analytical views → CSV export for Power BI. It covers 215 NHS
+Trusts/Foundation Trusts (211–215 in any one year, because of mergers and dissolutions) across financial
+years 2021/22–2023/24. See [README.md](README.md) for headline
 findings and [PROJECT_DOCUMENTATION.md](PROJECT_DOCUMENTATION.md) for the full domain/data walkthrough
 (NHS background, TAC file format, KPI methodology, glossary).
 
@@ -34,8 +35,9 @@ to `nhs_gold` but writes `FROM nhs_silver.dim_trust` for the two dimension expor
 pre-pivoted income-statement table. Getting a trust's income/expenditure requires pivoting on `sub_code`
 (e.g. `SCI0100A` = patient care income, `SCI0140A` = operating surplus, `EXP0130` = staff costs, `BAL1500`
 = total equity) — this is exactly what the SQL views do. `promote_to_fact()` in `load_tac_data.py` loads
-**every** worksheet indiscriminately (no worksheet filter), so all 28 real TAC schedules — not just the
-handful with a dedicated view — already flow into `fct_tac`. See `agent_docs/data_dictionary.md` for the
+**every** worksheet indiscriminately (no worksheet filter), so all 30 TAC worksheets present in the source
+files — not just the handful with a dedicated view — already flow into `fct_tac` (`dim_worksheet` seeds 32;
+two of those never appear in the data). See `agent_docs/data_dictionary.md` for the
 SubCode reference and `PROJECT_DOCUMENTATION.md`, stage ④, for the full star-schema diagram.
 
 **Pipeline flow** (each stage reads what the last stage wrote — run them in order):
@@ -50,11 +52,25 @@ data/raw/*.xlsx  →  python/ingestion/load_tac_data.py       →  nhs_bronze.* 
 
 Each Excel file drives one `financial_year` × `trust_type` (`NHS_TRUST` or `FOUNDATION_TRUST`) load. Each
 annual file contains both Current Year (CY) and Prior Year (PY) rows for comparison. Bronze preserves both;
-Silver promotion keeps **CY only** (`year_type = 'CY'`) to avoid double-counting across years.
+Silver promotion keeps **CY only** (`year_type = 'CY'`) to avoid double-counting across years. Amounts are
+`DECIMAL(18,5)` — TAC has genuine fractional £000 values, so never round or `CAST(... AS SIGNED)` them.
 
-**View layer** (`nhs_gold.v_*`, defined in both `sql/schema/create_tables_mysql.sql` and standalone under
-`sql/views/` — the standalone files are the fuller/canonical versions, check both if a view looks out of
-date):
+Things that span several files and are easy to break:
+
+- **Load order is filename order, not chronological** (all Foundation Trust years, then all NHS Trust
+  years). `populate_dim_trust()` is written to be order-independent — `first_year_seen`/`last_year_seen`
+  only widen, and name/type/sector/region come from the latest year seen. Keep it that way.
+- **Trust names join on a normalised key**, not the raw name (`provider_name_key()` in
+  `python/ingestion/source_integrity.py`). A name that can't be matched to the provider list is a
+  *critical* validation failure that stops the load. When NHS England publishes a trust under two
+  spellings, add a reviewed entry to `PROVIDER_NAME_ALIASES_RAW` there rather than loosening the match.
+- **Every load is logged** in `nhs_bronze.import_batch` (file SHA-256, row counts, status
+  `STARTED`/`VALIDATED`/`LOADED`/`FAILED`), and each fact row carries its file's `source_sha256`.
+
+**View layer** (`nhs_gold.v_*`). The standalone files under `sql/views/` are canonical.
+`create_tables_mysql.sql` still embeds older copies of seven of them, but its last line `SOURCE`s
+`sql/schema/deploy_gold_views.sql`, which recreates all nine in dependency order and overwrites those
+copies. `v_cash_flow` and `v_statement_reconciliation` exist only as standalone files:
 
 - `v_income_expenditure` — pivots the 5 core TAC02 SoCI SubCodes into I&E summary per trust/year; feeds
   `v_kpis`/`v_trust_annual_scorecard` — kept summary-only so those dependents don't change shape
@@ -109,17 +125,22 @@ CLAUDE.md files, trust the code.
 
 ## Commands
 
-The project has a small `unittest` regression suite and a `requirements.txt`; no linter is configured.
+The project has a small `unittest` regression suite (pure pandas, no database needed) and a
+`requirements.txt`; no linter is configured. Run everything from the repository root: the scripts use
+relative `data/` paths, and the schema's `SOURCE` lines resolve relative to the current directory.
 
 ```bash
 # Dependencies
 pip install -r requirements.txt
 
-# Focused regression tests
+# Focused regression tests (single test: python -m unittest tests.test_load_tac_data.SourceValidationTests -v)
 python -m unittest discover -s tests -v
 
-# 1. Build schema (databases, tables, seed dimensions, views) — run the whole file in a MySQL client
+# 1. Build schema (databases, tables, seed dimensions, views). DROPs and recreates every table.
+#    --commands is required on MySQL 9+, otherwise the trailing SOURCE of the Gold views is skipped.
 mysql --commands -u root -p < sql/schema/create_tables_mysql.sql
+# Redeploy only the nine Gold views (safe; touches no data):
+mysql --commands -u root -p < sql/schema/deploy_gold_views.sql
 
 # 2. Ingest all 6 TAC files found in data/raw/ (~10-15 min)
 python python/ingestion/load_tac_data.py
@@ -136,8 +157,12 @@ python python/transformation/transform_tac_data.py
 python python/reporting/export_for_powerbi.py
 ```
 
-All database scripts read `DB_PASSWORD` from the environment; `DB_USER`, `DB_HOST`, and `DB_PORT` also
-support environment overrides and default to `root`, `127.0.0.1`, and `3306`.
+All database scripts read `DB_PASSWORD` from the environment (no default — they raise `RuntimeError` if
+it's unset; `export DB_PASSWORD='...'` first); `DB_USER`, `DB_HOST`, and `DB_PORT` also support
+environment overrides and default to `root`, `127.0.0.1`, and `3306`.
+
+`sql/schema/create_tables.sql` is the older PostgreSQL version of the schema (`CREATE SCHEMA`,
+`BIGSERIAL`). Don't run or edit it as if it were current; `create_tables_mysql.sql` is the live one.
 
 `data/raw/` (source Excel, ~170MB) and `data/processed/` (generated) are git-ignored — regenerate rather
 than expecting them to be present after a fresh clone.
