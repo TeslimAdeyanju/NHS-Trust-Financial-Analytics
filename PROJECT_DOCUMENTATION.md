@@ -4,7 +4,7 @@
 
 This document explains the business question, NHS accounting context, implemented data architecture, six-stage processing lifecycle, analytical measures, published-account reconciliation and outstanding validation work. It is written for readers who want to understand **what the project does, why each design choice matters, how to reproduce it and which conclusions remain provisional**.
 
-**Project status (29 October 2026):** The source-to-report pipeline has been freshly executed across all six TAC workbooks: 2,210,974 facts, 215 trusts, 633 trust-years, 18 passed validation checks, one non-critical warning, thirteen canonical exports and nine enriched outputs. The final interactive Power BI dashboard has **not been published**, four closing-cash exceptions remain open, and the project's measures have **not yet been bridged fully** to NHS England's consolidated before-impairments-and-transfers balances.
+**Project status (29 October 2026):** The source-to-report pipeline has been freshly executed across all six TAC workbooks: 2,210,974 facts, 215 trusts, 633 trust-years, 18 passed validation checks, one non-critical warning, thirteen canonical exports and nine enriched outputs. A from-scratch rebuild on 21 November 2026 reproduced these results exactly. The final interactive Power BI dashboard has **not been published**, and the project's measures have **not yet been bridged fully** to NHS England's consolidated before-impairments-and-transfers balances.
 
 ## Contents
 
@@ -240,7 +240,7 @@ The model separates provider information from detailed TAC financial records. Ni
 
 I treat **operating surplus**, **net surplus** and NHS England's published **surplus/deficit before impairments and transfers** as distinct measures. That distinction became especially important when the initial portfolio figures did not align with the official published financial balances. EBITDA and other RAG labels are analytical aids, not automatic NHS regulatory ratings.
 
-**Verified output:** All nine views deployed successfully on MySQL 9.5. All 633 trust-years contain SoCI, SoFP and SoCF records. SoCI, SoFP and SoCF internal residuals are within £1k; four SoFP-to-SoCF closing-cash exceptions exceed £1k and remain unresolved.
+**Verified output:** All nine views deployed successfully on MySQL 9.5. All 633 trust-years contain SoCI, SoFP and SoCF records. SoCI, SoFP and SoCF internal residuals are within £1k; four SoFP-to-SoCF closing-cash exceptions exceed £1k. All four are explained by bank overdrafts, which the SoFP excludes from cash and the SoCF nets off; after adding overdrafts back, no trust-year exceeds £1k ([workpaper, section 4.1](reports/nhs_financial_reconciliation.md#41-closing-cash-exceptions-explained-by-bank-overdrafts)).
 
 **Technical notebook:** [Stage 4 — Data Modelling & Analytics](notebook/04-data-modelling-and-analytics/README.md), including the star schema, SQL view definitions, KPI logic and diagnostic queries.
 
@@ -311,18 +311,22 @@ python python/reporting/export_for_powerbi.py
 
 All source duplicate, fact-key collision, provider ambiguity, provider duplication and unmatched-provider
 counts were zero. The single validation warning represents four SoFP-to-SoCF closing-cash residuals above
-£1k; it is an accounting exception, not a pipeline failure.
+£1k; it is an accounting presentation difference, not a pipeline failure. Each residual equals the trust's
+bank overdraft in the `TAC19 CCE` cash note: the SoFP shows cash gross with overdrafts in borrowings, while
+the SoCF shows cash net of overdrafts.
 
-| Provider/year exception | Closing-cash residual (£000) |
-|---|---:|
-| Cambridge University Hospitals NHS Foundation Trust — 2021/22 | 134.65240 |
-| Royal Cornwall Hospitals NHS Trust — 2022/23 | 3.00000 |
-| Royal Cornwall Hospitals NHS Trust — 2023/24 | 5.00000 |
-| Tees, Esk and Wear Valleys NHS Foundation Trust — 2023/24 | 269.99410 |
+| Provider/year exception | Closing-cash residual (£000) | Bank overdraft (£000) |
+|---|---:|---:|
+| Cambridge University Hospitals NHS Foundation Trust — 2021/22 | 134.65240 | −135 |
+| Royal Cornwall Hospitals NHS Trust — 2022/23 | 3.00000 | −3 |
+| Royal Cornwall Hospitals NHS Trust — 2023/24 | 5.00000 | −5 |
+| Tees, Esk and Wear Valleys NHS Foundation Trust — 2023/24 | 269.99410 | −270 |
 
-The source-to-report implementation can therefore be described as technically reproduced. The broader
-accounting bridge to NHS England's published before-impairments-and-transfers balance and these four cash
-exceptions remain open and must not be described as reconciled.
+With overdrafts added back, none of the 633 trust-years has a closing-cash difference above £1k; the full
+analysis is in the [reconciliation workpaper, section 4.1](reports/nhs_financial_reconciliation.md#41-closing-cash-exceptions-explained-by-bank-overdrafts).
+The source-to-report implementation can therefore be described as technically reproduced, with all three
+statements internally consistent. The broader accounting bridge to NHS England's published
+before-impairments-and-transfers balance remains open and must not be described as reconciled.
 
 ## Financial Findings and Reconciliation
 
@@ -383,7 +387,7 @@ No number should be changed solely to match an external benchmark. Unresolved di
 | Source duplicates and provider mappings require verification on every load | May mask source duplication or exclude providers | Automated pre-write gate passed for all six workbooks in the fresh database run |
 | Database credentials must not be embedded in scripts | Security exposure | Environment-based configuration implemented; rotate any previously exposed password |
 | Fresh populated-database run | Required for reproducibility | Completed for all six workbooks: 2,210,974 fact rows, 215 trusts, and all source-integrity gates passed |
-| Four SoFP-to-SoCF closing-cash exceptions exceed £1k | Closing cash is not fully reconciled for those trust-years | Open; exported and recorded as a non-critical validation warning |
+| Four SoFP-to-SoCF closing-cash exceptions exceed £1k | Could be misread as unreconciled cash | Explained: all four are bank overdrafts (SoFP gross, SoCF net). Follow-up: add the `TAC19 CCE` overdraft bridge to `v_statement_reconciliation` so the check passes on the correct basis |
 | Dashboard is not published | No user-facing interactive report to validate | Open |
 
 **Credential guidance:** all database scripts require an environment-supplied `DB_PASSWORD`; user, host and port also support environment overrides. Never commit real passwords, and rotate any password previously exposed in Git history.
@@ -452,7 +456,8 @@ A reproducible run should archive checksums of six TAC inputs, schema/script rev
 
 ### Recommended order of completion
 
-1. Investigate and explain the four SoFP-to-SoCF closing-cash exceptions.
+1. ~~Investigate and explain the four SoFP-to-SoCF closing-cash exceptions.~~ Done 21 November 2026:
+   bank overdrafts. Remaining: apply the overdraft bridge in `v_statement_reconciliation`.
 2. Complete the bridge from TAC measures to NHS England's official before-impairments-and-transfers balances.
 3. Recalculate financial analysis and amend the detailed [2023/24 review](reports/nhs_sector_financial_review_2324.md) where required.
 4. Produce and test a genuine Power BI report with reconciled values, then add screenshots and publication details.

@@ -226,7 +226,9 @@ rebuild on 21 November 2026 produced an identical report:
 - average acute-sector pay-to-income was 64.9%;
 - all 633 trust-years contained SoCI, SoFP and SoCF records;
 - SoCI, SoFP and SoCF internal residuals were within £1k;
-- four SoFP-to-SoCF closing-cash differences exceeded £1k and remain visible as a warning.
+- four SoFP-to-SoCF closing-cash differences exceeded £1k and remain visible as a warning. All four are
+  bank overdrafts, which the SoFP excludes from cash and the SoCF nets off (see
+  [stage ④](../04-data-modelling-and-analytics/README.md)).
 
 The machine-readable result is written to `data/processed/validation_report.csv`. A passed rule confirms
 that rule only; it does not replace the outstanding bridge to NHS England's official

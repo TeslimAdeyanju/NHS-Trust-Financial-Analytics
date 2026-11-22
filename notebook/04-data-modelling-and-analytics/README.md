@@ -46,18 +46,23 @@ conventions.
 The SQL views were executed against the freshly populated MySQL database for all 633 trust-years (first on
 29 October 2026; a from-scratch rebuild on 21 November 2026 gave identical results). SoCI,
 SoFP and SoCF residuals are within £1k; four SoFP-to-SoCF closing-cash exceptions exceed £1k, with a
-maximum of £269.9941k. The accounting interpretation therefore remains preliminary pending resolution of
-those exceptions: [financial reconciliation workpaper](../../reports/nhs_financial_reconciliation.md).
+maximum of £269.9941k.
 
-| Provider/year exception | Closing-cash residual (£000) |
-|---|---:|
-| Cambridge University Hospitals NHS Foundation Trust — 2021/22 | 134.65240 |
-| Royal Cornwall Hospitals NHS Trust — 2022/23 | 3.00000 |
-| Royal Cornwall Hospitals NHS Trust — 2023/24 | 5.00000 |
-| Tees, Esk and Wear Valleys NHS Foundation Trust — 2023/24 | 269.99410 |
+**All four are bank overdrafts, not errors.** The SoFP reports cash gross, with overdrafts in borrowings;
+the SoCF reports cash net of overdrafts (IAS 7). The `TAC19 CCE` cash note bridges the two, and each
+residual equals the trust's overdraft (`CCE0140`) to within rounding:
 
-These values are diagnostic differences, not adjustments. They remain unchanged until their source or
-accounting cause is evidenced.
+| Provider/year exception | Closing-cash residual (£000) | Bank overdraft (£000) |
+|---|---:|---:|
+| Cambridge University Hospitals NHS Foundation Trust — 2021/22 | 134.65240 | −135 |
+| Royal Cornwall Hospitals NHS Trust — 2022/23 | 3.00000 | −3 |
+| Royal Cornwall Hospitals NHS Trust — 2023/24 | 5.00000 | −5 |
+| Tees, Esk and Wear Valleys NHS Foundation Trust — 2023/24 | 269.99410 | −270 |
+
+Adding the overdraft and committed-facility lines back leaves **no exception above £1k in any of the 633
+trust-years**. The view does not yet apply that bridge, so the validation warning still appears; correcting
+`cash_cross_statement_residual_000s` is a recorded follow-up. Full analysis, including a trap in the
+cash note's two value columns: [financial reconciliation workpaper, section 4.1](../../reports/nhs_financial_reconciliation.md#41-closing-cash-exceptions-explained-by-bank-overdrafts).
 
 ---
 

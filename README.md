@@ -32,7 +32,7 @@ This project was motivated by a need to understand the growing financial pressur
 
 **Why it matters:** The figures reveal a widening financial sustainability challenge and make it important to investigate which providers and spending categories face the greatest pressure. They do not, by themselves, establish a single cause of the deterioration.
 
-**Basis and limitations:** The figures above come from NHS England's official consolidated provider accounts, not the project's SQL measure. The project pipeline has now been freshly executed and its source, grain, provider mapping and three-statement controls validated. However, the TAC-derived operating measure (`SCI0140A`) is different from the official before-impairments-and-transfers balance and still requires a like-for-like accounting bridge. Four SoFP-to-SoCF closing-cash exceptions above £1k also remain open.
+**Basis and limitations:** The figures above come from NHS England's official consolidated provider accounts, not the project's SQL measure. The project pipeline has now been freshly executed and its source, grain, provider mapping and three-statement controls validated. However, the TAC-derived operating measure (`SCI0140A`) is different from the official before-impairments-and-transfers balance and still requires a like-for-like accounting bridge. Four SoFP-to-SoCF closing-cash differences above £1k have been traced to bank overdrafts, which the balance sheet and cash-flow statement treat differently by design; with overdrafts added back, all three statements agree for every trust-year.
 
 The 2023/24 deficit includes a £1.094 billion impact from changes in the accounting treatment of PFI liabilities under IFRS 16, affecting comparability.
 
@@ -73,7 +73,7 @@ The implementation uses MySQL Bronze, Silver and Gold layers. Detailed schemas, 
 
 - Six production TAC workbooks loaded from exact SHA-256-tracked source files.
 - 4,239,680 Bronze rows and 2,210,974 populated CY Silver facts.
-- 18 automated validation checks passed; one non-critical closing-cash warning remains.
+- 18 automated validation checks passed; the one non-critical closing-cash warning is explained by bank overdrafts.
 - All 633 trust-years contain SoCI, SoFP and SoCF records.
 - Thirteen canonical Power BI CSVs and nine separate enriched outputs generated.
 - Eight regression tests passing.

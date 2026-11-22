@@ -39,8 +39,11 @@ none of the data — only DAX measures, so they have a home not tied to any one 
 `fact_profit_and_loss`, `fact_balance_sheet` and `fact_cash_flow` expose the three principal statements.
 `fact_statement_reconciliation` supplies statement-coverage flags and diagnostic residuals. No published
 report page consumes these newer tables yet; until that work is completed they are available for ad-hoc
-visuals, reconciliation review and drillthrough. A visual must not label the statements fully reconciled:
-four closing-cash residuals exceed £1k in the verified run.
+visuals, reconciliation review and drillthrough. Four trust-years show a closing-cash residual above £1k
+in `fact_statement_reconciliation`; each equals that trust's bank overdraft, which the balance sheet and
+cash-flow statement treat differently by design. A visual showing that column should label those rows as
+explained overdraft differences, not as reconciliation failures, until the view applies the overdraft
+bridge.
 
 ---
 

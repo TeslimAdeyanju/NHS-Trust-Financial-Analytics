@@ -2,7 +2,7 @@
 
 **Status:** Source/code audit and live three-statement validation completed; national accounting-basis reconciliation remains preliminary.
 
-**Prepared:** 28 October 2026; live-run evidence updated 29 October 2026
+**Prepared:** 28 October 2026; live-run evidence updated 29 October 2026; closing-cash exceptions explained and rebuild evidence added 21 November 2026
 
 **Scope:** NHS trusts and NHS foundation trusts. All monetary amounts below are £ million unless noted.
 
@@ -64,15 +64,100 @@ Primary official documents: [2022/23 accounts](https://www.gov.uk/government/pub
 8. `v_kpis.sql` now applies parentheses consistently around the EBITDA numerator. Its RAG thresholds remain illustrative project bands rather than NHS regulatory ratings.
 
 These observations originated from repository review. A subsequent fresh MySQL run loaded 2,210,974
-facts for 215 trusts and confirmed complete three-statement coverage across 633 trust-years. Four
-SoFP-to-SoCF closing-cash residuals exceed £1k and remain documented exceptions.
+facts for 215 trusts and confirmed complete three-statement coverage across 633 trust-years. A
+from-scratch rebuild on 21 November 2026 reproduced the same facts and validation results.
 
-| Provider/year exception | Closing-cash residual (£000) |
+### 4.1 Closing-cash exceptions: explained by bank overdrafts
+
+**Conclusion:** the four SoFP-to-SoCF closing-cash exceptions are not data or pipeline errors. In every
+case the difference is the trust's bank overdraft, which the two statements treat differently by
+design. Once overdrafts are added back, no trust-year in the dataset has a closing-cash difference above
+the £1,000 tolerance.
+
+**Why the two figures differ.** The Statement of Financial Position (SoFP, `BAL1240`) reports cash and
+cash equivalents gross, with any bank overdraft shown separately within borrowings. The Statement of Cash
+Flows (SoCF, `SCF0355`) reports cash and cash equivalents *net* of overdrafts that are repayable on demand
+and form part of cash management, as IAS 7 requires. TAC's own cash note, `TAC19 CCE`, records the bridge
+explicitly:
+
+> Total cash and cash equivalents as in SoFP (`CCE0130`)
+> \+ Bank overdrafts (`CCE0140`) + Drawdown in committed facility (`CCE0150`)
+> = Total cash and cash equivalents as in SoCF (`CCE0160`)
+
+The project's check (`cash_cross_statement_residual_000s` in `v_statement_reconciliation`) compares
+`BAL1240` with `SCF0355` directly, without the overdraft step, so any trust with an overdraft shows a
+residual equal to that overdraft.
+
+**The four exceptions** (£000):
+
+| Provider/year | SoFP cash (`BAL1240`) | Bank overdraft (`CCE0140`) | SoFP cash after overdraft | SoCF closing cash (`SCF0355`) | Residual now reported | Residual after bridge |
+|---|---:|---:|---:|---:|---:|---:|
+| Cambridge University Hospitals NHS Foundation Trust — 2021/22 | 224,151 | −135 | 224,016 | 224,016.35 | 134.65 | −0.35 |
+
+| Royal Cornwall Hospitals NHS Trust — 2022/23 | 24,620 | −3 | 24,617 | 24,617 | 3.00 | 0.00 |
+| Royal Cornwall Hospitals NHS Trust — 2023/24 | 16,868 | −5 | 16,863 | 16,863 | 5.00 | 0.00 |
+| Tees, Esk and Wear Valleys NHS Foundation Trust — 2023/24 | 60,198 | −270 | 59,928 | 59,928.01 | 269.99 | −0.01 |
+
+In words: Tees, Esk and Wear Valleys had an overdraft of £270,000 at 31 March 2024, Cambridge
+University Hospitals one of £135,000 at 31 March 2022, and Royal Cornwall Hospitals overdrafts of £3,000
+and £5,000 at 31 March 2023 and 2024. The remaining differences of about £348 and £6 are rounding: the SoCF
+lines for those two trusts carry fractional £000 values while the SoFP and cash note are in whole
+thousands.
+
+**Population-wide test.** The bridge was applied to all 633 trust-years, not only these four:
+
+| Test (all 633 trust-years) | Result |
 |---|---:|
-| Cambridge University Hospitals NHS Foundation Trust — 2021/22 | 134.65240 |
-| Royal Cornwall Hospitals NHS Trust — 2022/23 | 3.00000 |
-| Royal Cornwall Hospitals NHS Trust — 2023/24 | 5.00000 |
-| Tees, Esk and Wear Valleys NHS Foundation Trust — 2023/24 | 269.99410 |
+| Trust-years with SoFP and SoCF cash both present | 633 |
+| Trust-years reporting a bank overdraft (`CCE0140` ≠ 0) | 5 |
+| Trust-years drawing on a committed facility (`CCE0150` ≠ 0) | 0 |
+| Exceptions above £1,000 — current check (`BAL1240 − SCF0355`) | 4 |
+| Exceptions above £1,000 — after adding overdraft and facility lines | **0** |
+| Largest absolute difference after the bridge | £926 (0.92561 in £000) |
+
+The fifth overdraft — Royal Cornwall Hospitals, 2021/22, £1,000 — produced a residual of exactly £1,000,
+which the current check passes because its tolerance is "more than £1,000".
+
+**A trap in the cash note.** `TAC19 CCE` has two value columns, `A19CY01` and `A19CY02`. In 127
+trust-years (mostly foundation trusts) the trust reported its cash across both, so `A19CY01` alone
+disagrees with the SoCF; the two columns summed agree in every case. Any query using the note must sum
+both columns. No overdraft or facility amount appears in `A19CY02` in this dataset, but a corrected check
+should still sum both.
+
+**Recommended correction (not yet applied).** Change the closing-cash residual in
+`sql/views/v_statement_reconciliation.sql` to add the overdraft and committed-facility lines from
+`TAC19 CCE` (both columns) before comparing with `SCF0355`:
+
+```sql
+-- SoFP cash, plus overdrafts and committed-facility drawdowns (both TAC19 columns), less SoCF closing cash
+sofp.cash_and_cash_equivalents_000s
+  + COALESCE(cce.overdrafts_and_facility_000s, 0)
+  - socf.closing_cash_000s
+```
+
+With that change the validation check would pass for all 633 trust-years. Until it is made, the check will
+continue to report these four trust-years as a non-critical warning. That warning is expected and
+explained, not an open accounting question.
+
+**Reproduce:**
+
+```sql
+WITH c AS (
+  SELECT org_code, financial_year,
+         MAX(CASE WHEN sub_code = 'BAL1240' THEN total_000s END)                     AS sofp_cash,
+         MAX(CASE WHEN sub_code = 'SCF0355' THEN total_000s END)                     AS socf_cash,
+         SUM(CASE WHEN sub_code IN ('CCE0140', 'CCE0150') THEN total_000s END)       AS overdrafts
+  FROM nhs_silver.fct_tac
+  WHERE sub_code IN ('BAL1240', 'SCF0355', 'CCE0140', 'CCE0150')
+  GROUP BY org_code, financial_year
+)
+SELECT org_code, financial_year, sofp_cash, overdrafts, socf_cash,
+       sofp_cash - socf_cash                AS residual_now,
+       sofp_cash + overdrafts - socf_cash   AS residual_after_bridge
+FROM c
+WHERE ABS(sofp_cash - socf_cash) > 1 OR ABS(sofp_cash + overdrafts - socf_cash) > 1
+ORDER BY ABS(sofp_cash - socf_cash) DESC;
+```
 
 ## 5. Reconciliation workpaper template
 
@@ -138,6 +223,8 @@ The final query intentionally surfaces duplicates for review: do not automatical
 - [ ] Confirm `SCI0140A`, `SCI0240` and other relevant TAC definitions and their sign conventions.
 - [x] Re-run ingestion and verify `CY` selection, duplicate keys, organisational mappings and missing statement measures.
 - [x] Export per-provider, per-year SoCI, SoFP, SoCF and statement-reconciliation components.
+- [x] Explain the four SoFP-to-SoCF closing-cash exceptions (bank overdrafts; see section 4.1).
+- [ ] Apply the overdraft bridge to `v_statement_reconciliation` so the closing-cash check passes on the correct basis.
 - [ ] Obtain official consolidation/inter-provider/charitable adjustment amounts from the annual reports and reconcile the statutory lines.
 - [ ] Explain every material variance and year-on-year accounting-policy difference.
 - [ ] Reconcile the deficit flag to the **same** official measure and provider population.
@@ -146,7 +233,7 @@ The final query intentionally surfaces duplicates for review: do not automatical
 
 ## 8. Evidence classification
 
-**Verified:** Official NHS England benchmark figures and 2022/23 published accounting bridge; the code-level mapping and classification logic described above.
+**Verified:** Official NHS England benchmark figures and 2022/23 published accounting bridge; the code-level mapping and classification logic described above; the cause of all four SoFP-to-SoCF closing-cash exceptions (bank overdrafts), tested across all 633 trust-years.
 
 **Previously reported, not reproduced:** Project `+£1.6bn / +£148m / −£1.6bn` operating values, project trust counts and project income/expenditure table.
 
