@@ -32,7 +32,7 @@
 | `fact_sector_benchmarks` | `sector_benchmarks.csv` | One row per financial year per sector per trust type |
 | `_Measures` | — (blank calculated table) | Holds every DAX measure; no data columns |
 
-Full column lists for each are in `PROJECT_DOCUMENTATION.md`, stage ⑤.
+Full column lists for each are in `project_documentation.md`, stage ⑤.
 
 ### Relationships
 

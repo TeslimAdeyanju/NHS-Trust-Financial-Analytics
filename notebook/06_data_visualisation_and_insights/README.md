@@ -2,8 +2,8 @@
 
 **Implementation:** Power BI semantic model, DAX and proposed report pages (publication pending).
 
-> Imports the thirteen CSVs from [stage ⑤](../05-data-preparation-for-reporting/README.md) (or connects directly to
-> [stage ④](../04-data-modelling-and-analytics/README.md) via DirectQuery), builds the model relationships and DAX
+> Imports the thirteen CSVs from [stage ⑤](../05_data_preparation_for_reporting/README.md) (or connects directly to
+> [stage ④](../04_data_modelling_and_analytics/README.md) via DirectQuery), builds the model relationships and DAX
 > measures below, and is specified to render five report pages. This is the only stage a non-technical end
 > user — a finance director, a board — actually interacts with; there is no code to run here, only a model
 > to build inside Power BI Desktop, which is why this stage's "code" lives in `.md`/`.tmdl` files rather
@@ -67,9 +67,9 @@ fact_sector_benchmarks[financial_year]                   → dim_financial_year 
 ```
 
 `fact_sector_benchmarks` has no relationship to `dim_trust`: it was built pre-aggregated by
-`(sector, trust_type)` in [stage ⑤](../05-data-preparation-for-reporting/README.md)'s SQL, so it has no `org_code` column to join
+`(sector, trust_type)` in [stage ⑤](../05_data_preparation_for_reporting/README.md)'s SQL, so it has no `org_code` column to join
 on — `sector` and `trust_type` stay unmodelled attributes on the table itself. The resulting eleven-fact star
-diagram, re-exported from Power BI's own model view, is in `PROJECT_DOCUMENTATION.md`, stage ⑤.
+diagram, re-exported from Power BI's own model view, is in `project_documentation.md`, stage ⑤.
 
 ---
 
@@ -172,8 +172,8 @@ Red (unsustainable):  #DA291C     Grey (no data):  #E8EDEE
 | [power_bi/dax_measures.md](../../power_bi/dax_measures.md) | All 51 measures, grouped by family, human-readable |
 | [power_bi/dax/_Measures.tmdl](../../power_bi/dax/_Measures.tmdl) | The authoritative, machine-exported measure definitions |
 | [power_bi/CLAUDE.md](../../power_bi/CLAUDE.md) | Naming conventions, standard measure patterns, visual standards |
-| [PROJECT_DOCUMENTATION.md](../../PROJECT_DOCUMENTATION.md), stage ⑥ | The narrative version |
+| [project_documentation.md](../../project_documentation.md), stage ⑥ | The narrative version |
 
 ---
 
-*Previous: [Stage ⑤ — Data Preparation for Reporting](../05-data-preparation-for-reporting/README.md)*
+*Previous: [Stage ⑤ — Data Preparation for Reporting](../05_data_preparation_for_reporting/README.md)*

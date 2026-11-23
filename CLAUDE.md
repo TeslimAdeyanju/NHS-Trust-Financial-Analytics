@@ -8,7 +8,7 @@ An end-to-end financial analytics pipeline built on **real NHS England Trust Acc
 data**: 6 Excel source files → MySQL → SQL analytical views → CSV export for Power BI. It covers 215 NHS
 Trusts/Foundation Trusts (211–215 in any one year, because of mergers and dissolutions) across financial
 years 2021/22–2023/24. See [README.md](README.md) for headline
-findings and [PROJECT_DOCUMENTATION.md](PROJECT_DOCUMENTATION.md) for the full domain/data walkthrough
+findings and [project_documentation.md](project_documentation.md) for the full domain/data walkthrough
 (NHS background, TAC file format, KPI methodology, glossary).
 
 ## Architecture (read this before touching the pipeline)
@@ -38,7 +38,7 @@ pre-pivoted income-statement table. Getting a trust's income/expenditure require
 **every** worksheet indiscriminately (no worksheet filter), so all 30 TAC worksheets present in the source
 files — not just the handful with a dedicated view — already flow into `fct_tac` (`dim_worksheet` seeds 32;
 two of those never appear in the data). See `agent_docs/data_dictionary.md` for the
-SubCode reference and `PROJECT_DOCUMENTATION.md`, stage ④, for the full star-schema diagram.
+SubCode reference and `project_documentation.md`, stage ④, for the full star-schema diagram.
 
 **Pipeline flow** (each stage reads what the last stage wrote — run them in order):
 

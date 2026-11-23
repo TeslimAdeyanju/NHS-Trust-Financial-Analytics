@@ -252,7 +252,7 @@ This stage is entirely external to the system I built — it's the authoritative
 consuming, not producing, and there's no API: downloading requires accepting NHS England's terms of use on
 the page itself.
 
-For the source publication, cadence, and data-provenance context, see [Stage ① — NHS England (Source)](notebook/01-data-sourcing/README.md).
+For the source publication, cadence, and data-provenance context, see [Stage ① — NHS England (Source)](notebook/01_data_sourcing/README.md).
 
 ---
 
@@ -272,12 +272,12 @@ That's six files in total, saved into `data/raw/` under the exact names the pipe
 
 ```text
 data/raw/
-  TAC_NHS_trusts_2021-22.xlsx             16MB  —  66 NHS Trusts
-  TAC_NHS_foundation_trusts_2021-22.xlsx  33MB  — 140 Foundation Trusts
-  TAC_NHS_trusts_2022-23.xlsx             20MB  —  66 NHS Trusts
-  TAC_NHS_foundation_trusts_2022-23.xlsx  36MB  — 140 Foundation Trusts
-  TAC_NHS_trusts_2023-24.xlsx             18MB  —  66 NHS Trusts
-  TAC_NHS_foundation_trusts_2023-24.xlsx  38MB  — 140 Foundation Trusts
+  tac_nhs_trusts_2021_22.xlsx             16MB  —  66 NHS Trusts
+  tac_nhs_foundation_trusts_2021_22.xlsx  33MB  — 140 Foundation Trusts
+  tac_nhs_trusts_2022_23.xlsx             20MB  —  66 NHS Trusts
+  tac_nhs_foundation_trusts_2022_23.xlsx  36MB  — 140 Foundation Trusts
+  tac_nhs_trusts_2023_24.xlsx             18MB  —  66 NHS Trusts
+  tac_nhs_foundation_trusts_2023_24.xlsx  38MB  — 140 Foundation Trusts
 ```
 
 `data/raw/` is git-ignored — at ~170MB total, these are re-downloadable source files, not something that
@@ -301,7 +301,7 @@ and sector.
 | Sector | Acute | Like-for-like comparison |
 | Authorisation date | 6/1/10 | Present in the source; not used by the current pipeline |
 
-![List of Providers sheet showing trust names, NHS codes, authorisation dates, regions, and sectors.](docs/images/List%20of%20Providers.png)
+![List of Providers sheet showing trust names, NHS codes, authorisation dates, regions, and sectors.](docs/images/list_of_providers.png)
 
 **Sheet 2 — "All Data"** contains the reported financial figures in **long/narrow format**. Each row is
 one reported amount from the original TAC tables, identified by trust, schedule, table, reporting column,
@@ -330,7 +330,7 @@ and one Foundation Trust workbook roughly 1.1 million. After the pipeline filter
 loads the three financial years, the fact table contains about **2.18 million rows**.
 
 For the detailed field walkthrough and how `MainCode` and CY/PY values work across annual files, see
-[Stage ② — Raw Excel Files](notebook/02-data-ingestion/README.md).
+[Stage ② — Raw Excel Files](notebook/02_data_ingestion/README.md).
 
 ---
 
@@ -342,7 +342,7 @@ data into a queryable form with the *minimum* transformation applied — one row
 table. I deliberately kept this stage "dumb": no joins, no pivoting, no business logic — just a faithful,
 query-able landing zone for what NHS England actually published.
 
-For the detailed staging walkthrough, including the load and validation steps, see [Stage ③ — MySQL Staging](notebook/03-data-cleaning-and-transformation/README.md).
+For the detailed staging walkthrough, including the load and validation steps, see [Stage ③ — MySQL Staging](notebook/03_data_cleaning_and_transformation/README.md).
 
 ### Where this data actually lives
 
@@ -502,7 +502,7 @@ into the star schema below, and refreshes `dim_trust`. This is where the raw, EA
 becomes a conformed, indexed fact table with proper keys. `nhs_gold` sits on top of it, holding only the
 SQL views that pivot `nhs_silver.fct_tac` into KPI-ready and statement-shaped output.
 
-For the detailed schema and analytics walkthrough, see [Stage ④ — MySQL Analytics](notebook/04-data-modelling-and-analytics/README.md).
+For the detailed schema and analytics walkthrough, see [Stage ④ — MySQL Analytics](notebook/04_data_modelling_and_analytics/README.md).
 
 ### Why the fact table is kept in long/narrow format
 
@@ -559,8 +559,8 @@ Staging's scoped DELETE-then-INSERT doesn't work for either of these tables, bec
 disposable — they're the *accumulation* of all six files, built up incrementally as the pipeline processes
 one file at a time. Walk through what a full run actually does:
 
-1. File 1 (`TAC_NHS_trusts_2021-22.xlsx`) loads and its rows land in `fct_tac`.
-2. File 2 (`TAC_NHS_foundation_trusts_2021-22.xlsx`) loads next. If this step started with
+1. File 1 (`tac_nhs_trusts_2021_22.xlsx`) loads and its rows land in `fct_tac`.
+2. File 2 (`tac_nhs_foundation_trusts_2021_22.xlsx`) loads next. If this step started with
    `TRUNCATE fct_tac`, it would delete the rows File 1 just added — the table doesn't belong to File 2, it
    belongs to all six files together.
 3. The same problem shows up across separate runs, not just within one: if I re-download an updated
@@ -947,7 +947,7 @@ BI (or any other tool, or a reviewer with no MySQL access) can consume without a
 all. Power BI can alternatively connect directly to MySQL in DirectQuery mode — the views were designed to
 support that too.
 
-For the export process and the contents of each file, see [Stage ⑤ — CSV Exports](notebook/05-data-preparation-for-reporting/README.md).
+For the export process and the contents of each file, see [Stage ⑤ — CSV Exports](notebook/05_data_preparation_for_reporting/README.md).
 
 ### Two implementation details that shape every file
 
@@ -1047,7 +1047,7 @@ the standard reporting tool in NHS finance departments.
 `dim_trust[sector]`, `dim_trust[region]`, and `dim_financial_year[financial_year]` are placed as slicers
 on every page, filtering all of that page's visuals simultaneously.
 
-For the dashboard setup, model, and page-by-page walkthrough, see [Stage ⑥ — Power BI Dashboard](notebook/06-data-visualisation-and-insights/README.md).
+For the dashboard setup, model, and page-by-page walkthrough, see [Stage ⑥ — Power BI Dashboard](notebook/06_data_visualisation_and_insights/README.md).
 
 ### Report pages
 
@@ -1085,7 +1085,7 @@ Python dependencies: `pandas`, `sqlalchemy`, `pymysql`, `openpyxl` — installed
 portfolio-01-nhs-trust-financial-analytics/
 │
 ├── README.md                          ← Quick-start summary
-├── PROJECT_DOCUMENTATION.md           ← This file
+├── project_documentation.md           ← This file
 ├── CLAUDE.md                          ← AI coding assistant instructions; real architecture reference
 │
 ├── agent_docs/                        ← Domain knowledge reference (see note under stage ④ re: scope)
@@ -1095,12 +1095,12 @@ portfolio-01-nhs-trust-financial-analytics/
 │
 ├── data/                              ← git-ignored; regenerated by the pipeline, not committed
 │   ├── raw/                           ← Source NHS Excel files — stage ②
-│   │   ├── TAC_NHS_trusts_2021-22.xlsx
-│   │   ├── TAC_NHS_foundation_trusts_2021-22.xlsx
-│   │   ├── TAC_NHS_trusts_2022-23.xlsx
-│   │   ├── TAC_NHS_foundation_trusts_2022-23.xlsx
-│   │   ├── TAC_NHS_trusts_2023-24.xlsx
-│   │   └── TAC_NHS_foundation_trusts_2023-24.xlsx
+│   │   ├── tac_nhs_trusts_2021_22.xlsx
+│   │   ├── tac_nhs_foundation_trusts_2021_22.xlsx
+│   │   ├── tac_nhs_trusts_2022_23.xlsx
+│   │   ├── tac_nhs_foundation_trusts_2022_23.xlsx
+│   │   ├── tac_nhs_trusts_2023_24.xlsx
+│   │   └── tac_nhs_foundation_trusts_2023_24.xlsx
 │   └── processed/
 │       ├── validation_report.csv      ← Output of validate_tac_data.py — stage ④
 │       └── powerbi_export/            ← Nine CSV files for Power BI — stage ⑤

@@ -11,7 +11,7 @@ guide.
 After running `python python/reporting/export_for_powerbi.py`, import these CSVs from
 `data/processed/powerbi_export/`. Rename each table on import to match the `fact_`/`dim_` prefix used
 throughout this guide and in the DAX measures — this is what Power BI's own model view shows once the
-import is done (see the model diagram in `PROJECT_DOCUMENTATION.md`, stage ⑤):
+import is done (see the model diagram in `project_documentation.md`, stage ⑤):
 
 | CSV file | Imported as | Rows | Description |
 |------|------|------|-------------|

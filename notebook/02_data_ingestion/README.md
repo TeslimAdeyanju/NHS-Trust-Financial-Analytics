@@ -12,12 +12,12 @@
 
 ```text
 data/raw/
-  TAC_NHS_trusts_2021-22.xlsx             16MB  —  70 provider-list rows
-  TAC_NHS_foundation_trusts_2021-22.xlsx  33MB  — 145 provider-list rows
-  TAC_NHS_trusts_2022-23.xlsx             20MB  —  69 provider-list rows
-  TAC_NHS_foundation_trusts_2022-23.xlsx  36MB  — 144 provider-list rows
-  TAC_NHS_trusts_2023-24.xlsx             18MB  —  68 provider-list rows
-  TAC_NHS_foundation_trusts_2023-24.xlsx  38MB  — 143 provider-list rows
+  tac_nhs_trusts_2021_22.xlsx             16MB  —  70 provider-list rows
+  tac_nhs_foundation_trusts_2021_22.xlsx  33MB  — 145 provider-list rows
+  tac_nhs_trusts_2022_23.xlsx             20MB  —  69 provider-list rows
+  tac_nhs_foundation_trusts_2022_23.xlsx  36MB  — 144 provider-list rows
+  tac_nhs_trusts_2023_24.xlsx             18MB  —  68 provider-list rows
+  tac_nhs_foundation_trusts_2023_24.xlsx  38MB  — 143 provider-list rows
 ```
 
 **Why 2 files per year?** NHS Trusts and Foundation Trusts are published separately. Same column
@@ -28,7 +28,7 @@ which type it is.
 current year and the prior-year comparison. The 2023/24 NHS Trusts file alone has 481,140 rows for 68
 listed providers.
 
-**The illustrative file** (`TAC_illustrative_2023-24.xlsx`) is a reference schema file showing every
+**The illustrative file** (`tac_illustrative_2023_24.xlsx`) is a reference schema file showing every
 SubCode and its description, not real trust data. The pipeline explicitly skips it:
 
 ```python
@@ -56,7 +56,7 @@ rows in the verified files). Not every listed provider necessarily has populated
 | Region | `North East and Yorkshire` |
 | Sector | `Acute` |
 
-![Screenshot of the List of Providers sheet, showing each provider's full name, NHS code, authorisation date, region, and sector.](../../docs/images/List%20of%20Providers.png)
+![Screenshot of the List of Providers sheet, showing each provider's full name, NHS code, authorisation date, region, and sector.](../../docs/images/list_of_providers.png)
 
 **Purpose:** provides the ODS code for each trust by name. The "All data" sheet has names, not codes —
 this sheet resolves that gap. The source also includes authorisation dates, but the current pipeline does
@@ -107,9 +107,9 @@ add a category suffix, such as `P` for permanent staff in `A09CY01P`.
 In the original TAC table, `SubCode` labels the line and `MainCode` labels the value column; "All data"
 flattens their intersection into one record. In the screenshot, `A02PY01` marks the prior-year comparison
 column alongside `A02CY01`. Because this is the 2021/22 workbook, its PY values are for 2020/21. Both
-CY and PY rows are kept in Bronze as source evidence ([stage ③](../03-data-cleaning-and-transformation/README.md));
+CY and PY rows are kept in Bronze as source evidence ([stage ③](../03_data_cleaning_and_transformation/README.md));
 only populated CY rows are promoted to the Silver fact table
-([stage ④](../04-data-modelling-and-analytics/README.md)), so comparison years are never counted twice
+([stage ④](../04_data_modelling_and_analytics/README.md)), so comparison years are never counted twice
 when workbooks are combined.
 
 ---
@@ -219,10 +219,10 @@ row counts and integrity results.
 |------|-------------|
 | `data/raw/` (git-ignored, local only) | Open any TAC `.xlsx` in Excel — examine both sheets directly |
 | [agent_docs/data_dictionary.md](../../agent_docs/data_dictionary.md) | Full SubCode reference, MainCode format, data-quality notes |
-| [PROJECT_DOCUMENTATION.md](../../PROJECT_DOCUMENTATION.md), stage ② | The narrative version, plus the "how I sourced the data" story |
+| [project_documentation.md](../../project_documentation.md), stage ② | The narrative version, plus the "how I sourced the data" story |
 | [python/ingestion/load_tac_data.py](../../python/ingestion/load_tac_data.py) | `filename_to_financial_year()`, `filename_to_trust_type()`, `read_provider_list()`, `read_all_data()` |
 
 ---
 
-*Previous: [Stage ① — Data Sourcing](../01-data-sourcing/README.md)*
-*Next: [Stage ③ — Data Cleaning & Transformation](../03-data-cleaning-and-transformation/README.md)*
+*Previous: [Stage ① — Data Sourcing](../01_data_sourcing/README.md)*
+*Next: [Stage ③ — Data Cleaning & Transformation](../03_data_cleaning_and_transformation/README.md)*

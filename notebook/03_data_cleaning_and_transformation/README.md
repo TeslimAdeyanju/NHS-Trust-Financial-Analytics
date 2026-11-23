@@ -5,7 +5,7 @@
 > `nhs_bronze` — populated by `python/ingestion/load_tac_data.py`. This stage lands the Excel data in a
 > queryable form with the *minimum* transformation applied — no joins, no pivoting, no business logic —
 > and runs the source quality gate that must pass before anything is written. Promotion into the Silver
-> star schema is [stage ④](../04-data-modelling-and-analytics/README.md).
+> star schema is [stage ④](../04_data_modelling_and_analytics/README.md).
 
 ---
 
@@ -37,7 +37,7 @@ Related implementation: [TAC schema](../../sql/schema/create_tables_mysql.sql), 
 ## Why a Separate Staging Database
 
 The project uses a three-database **medallion** split — Bronze (raw landing), Silver (conformed dims/fact,
-see [stage ④](../04-data-modelling-and-analytics/README.md)), Gold (curated analytical views, also stage ④):
+see [stage ④](../04_data_modelling_and_analytics/README.md)), Gold (curated analytical views, also stage ④):
 
 ```sql
 CREATE DATABASE IF NOT EXISTS nhs_bronze; -- staging (buffer) — this stage
@@ -77,7 +77,7 @@ df = pd.read_excel(path, sheet_name=sheet_name, header=0, dtype={
 })
 ```
 
-**Step B — Normalise column names** (the 2021/22-vs-later inconsistency from [stage ②](../02-data-ingestion/README.md)):
+**Step B — Normalise column names** (the 2021/22-vs-later inconsistency from [stage ②](../02_data_ingestion/README.md)):
 
 ```python
 col_map = {
@@ -228,7 +228,7 @@ rebuild on 21 November 2026 produced an identical report:
 - SoCI, SoFP and SoCF internal residuals were within £1k;
 - four SoFP-to-SoCF closing-cash differences exceeded £1k and remain visible as a warning. All four are
   bank overdrafts, which the SoFP excludes from cash and the SoCF nets off (see
-  [stage ④](../04-data-modelling-and-analytics/README.md)).
+  [stage ④](../04_data_modelling_and_analytics/README.md)).
 
 The machine-readable result is written to `data/processed/validation_report.csv`. A passed rule confirms
 that rule only; it does not replace the outstanding bridge to NHS England's official
@@ -243,9 +243,9 @@ before-impairments-and-transfers measure.
 | [python/ingestion/load_tac_data.py](../../python/ingestion/load_tac_data.py) | `read_provider_list()`, `read_all_data()`, `validate()`, `load_staging()` |
 | [sql/schema/create_tables_mysql.sql](../../sql/schema/create_tables_mysql.sql) | `stg_tac_raw` and `stg_provider_list` DDL |
 | [python/CLAUDE.md](../../python/CLAUDE.md) | Pandas patterns, environment-based connection configuration, validation pattern |
-| [PROJECT_DOCUMENTATION.md](../../PROJECT_DOCUMENTATION.md), stage ③ | The narrative version, plus the client/server MySQL diagram |
+| [project_documentation.md](../../project_documentation.md), stage ③ | The narrative version, plus the client/server MySQL diagram |
 
 ---
 
-*Previous: [Stage ② — Data Ingestion](../02-data-ingestion/README.md)*
-*Next: [Stage ④ — Data Modelling & Analytics](../04-data-modelling-and-analytics/README.md)*
+*Previous: [Stage ② — Data Ingestion](../02_data_ingestion/README.md)*
+*Next: [Stage ④ — Data Modelling & Analytics](../04_data_modelling_and_analytics/README.md)*

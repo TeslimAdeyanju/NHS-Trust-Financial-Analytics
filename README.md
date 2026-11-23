@@ -10,11 +10,11 @@ This project was motivated by a need to understand the growing financial pressur
 
 **How I investigated it:** I used NHS England's published Trust Accounts Consolidation data for three financial years, processed and standardised the source records with Python, and developed MySQL analytical views and financial measures for cross-year and trust-level comparison. The completed fresh run loaded 2,210,974 facts for 215 trusts, produced 633 trust-year analytical rows and regenerated thirteen reporting exports. The project also includes a Power BI reporting model; the dashboard itself is pending publication.
 
-[Explore the full project methodology and documentation](PROJECT_DOCUMENTATION.md).
+[Explore the full project methodology and documentation](project_documentation.md).
 
 ## Key findings
 
-<img src="docs/images/nhs-official-findings-table.svg" alt="Official NHS provider measures across 2021/22, 2022/23 and 2023/24: surplus or deficit, number of deficit providers and share in deficit." width="100%" />
+<img src="docs/images/nhs_official_findings_table.svg" alt="Official NHS provider measures across 2021/22, 2022/23 and 2023/24: surplus or deficit, number of deficit providers and share in deficit." width="100%" />
 
 <details>
 <summary>View the findings as a text table</summary>
@@ -38,7 +38,7 @@ The 2023/24 deficit includes a £1.094 billion impact from changes in the accoun
 
 **Official accounts:** [2021/22](https://www.gov.uk/government/publications/consolidated-nhs-provider-accounts-2021-to-2022) | [2022/23](https://www.gov.uk/government/publications/consolidated-nhs-provider-accounts-2022-to-2023) | [2023/24](https://www.gov.uk/government/publications/consolidated-nhs-provider-accounts-2023-to-2024).
 
-See [Project Documentation](PROJECT_DOCUMENTATION.md) and the [2023/24 Financial Review](reports/nhs_sector_financial_review_2324.md) for the existing project calculations, which require review.
+See [Project Documentation](project_documentation.md) and the [2023/24 Financial Review](reports/nhs_sector_financial_review_2324.md) for the existing project calculations, which require review.
 
 [Financial reconciliation workpaper](reports/nhs_financial_reconciliation.md) documents the official accounting bridge, differences in existing SQL metrics and outstanding validation steps.
 
@@ -60,14 +60,14 @@ The diagram connects the six methodological stages to NHS England TAC source dat
 
 Explore the six stages and their implementation notes:
 
-- **[Data Sourcing](notebook/01-data-sourcing/README.md):** Obtain NHS England TAC workbooks and establish source controls.
-- **[Data Ingestion](notebook/02-data-ingestion/README.md):** Load raw financial records into the Bronze layer.
-- **[Data Cleaning & Transformation](notebook/03-data-cleaning-and-transformation/README.md):** Validate and standardise financial records in Silver.
-- **[Data Modelling & Analytics](notebook/04-data-modelling-and-analytics/README.md):** Build SQL dimensions, facts and financial KPIs in Silver and Gold.
-- **[Data Preparation for Reporting](notebook/05-data-preparation-for-reporting/README.md):** Create curated datasets and reporting exports.
-- **[Data Visualisation & Insights](notebook/06-data-visualisation-and-insights/README.md):** Develop Power BI reporting and financial insights; dashboard publication is pending.
+- **[Data Sourcing](notebook/01_data_sourcing/README.md):** Obtain NHS England TAC workbooks and establish source controls.
+- **[Data Ingestion](notebook/02_data_ingestion/README.md):** Load raw financial records into the Bronze layer.
+- **[Data Cleaning & Transformation](notebook/03_data_cleaning_and_transformation/README.md):** Validate and standardise financial records in Silver.
+- **[Data Modelling & Analytics](notebook/04_data_modelling_and_analytics/README.md):** Build SQL dimensions, facts and financial KPIs in Silver and Gold.
+- **[Data Preparation for Reporting](notebook/05_data_preparation_for_reporting/README.md):** Create curated datasets and reporting exports.
+- **[Data Visualisation & Insights](notebook/06_data_visualisation_and_insights/README.md):** Develop Power BI reporting and financial insights; dashboard publication is pending.
 
-The implementation uses MySQL Bronze, Silver and Gold layers. Detailed schemas, data checks, source mappings and design decisions are documented in [Project Documentation](PROJECT_DOCUMENTATION.md).
+The implementation uses MySQL Bronze, Silver and Gold layers. Detailed schemas, data checks, source mappings and design decisions are documented in [Project Documentation](project_documentation.md).
 
 ### Verified pipeline status — 29 October 2026
 
@@ -82,7 +82,7 @@ The implementation uses MySQL Bronze, Silver and Gold layers. Detailed schemas, 
 
 | Resource | Contents |
 | --- | --- |
-| [Project Documentation](PROJECT_DOCUMENTATION.md) | Business case, source data, methodology, architecture and implementation |
+| [Project Documentation](project_documentation.md) | Business case, source data, methodology, architecture and implementation |
 | [2023/24 Financial Review](reports/nhs_sector_financial_review_2324.md) | Detailed findings and financial interpretation |
 | [Power BI Setup Guide](power_bi/setup_guide.md) | Relationships and proposed report pages |
 | [DAX Measures](power_bi/dax_measures.md) | Financial reporting calculations |
@@ -91,10 +91,10 @@ The implementation uses MySQL Bronze, Silver and Gold layers. Detailed schemas, 
 
 **Source:** [NHS England Trust Accounts Consolidation publications](https://www.england.nhs.uk/financial-accounting-reporting-systems/nhs-england-finance-returns-publications-guidance/trust-accounts-consolidation-tac/).
 
-To reproduce the pipeline, obtain the corresponding annual TAC workbooks, configure Python 3.11+ and MySQL 8+, and follow the documented ingestion, validation and export steps in [Project Documentation](PROJECT_DOCUMENTATION.md). The underlying source workbooks and generated exports are not committed to this repository.
+To reproduce the pipeline, obtain the corresponding annual TAC workbooks, configure Python 3.11+ and MySQL 8+, and follow the documented ingestion, validation and export steps in [Project Documentation](project_documentation.md). The underlying source workbooks and generated exports are not committed to this repository.
 
 ## Author
 
 **Teslim Adeyanju** | [Portfolio](https://adeyanjuteslim.co.uk) | [LinkedIn](https://www.linkedin.com/in/adeyanjuteslimuthman)
 
-[Previous README (full archive)](docs/readme-history.md)
+[Previous README (full archive)](docs/readme_history.md)

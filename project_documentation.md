@@ -106,7 +106,7 @@ For this project, financial sustainability means the capacity to meet obligation
 
 Using Python and SQL, I structured source records within MySQL Bronze, Silver and Gold layers, retaining accounting codes, signed values and reporting periods for traceability. I created statement-specific Gold SQL views to support analysis of operating results, financial position and cash flows, alongside reconciliation diagnostics for income and expenditure, balance sheet balances, cash movements and agreement of cash balances between statements.   
 
-These are implemented SQL definitions; execution and reconciliation against populated source data are documented separately. Technical implementation is covered in [Stage 3 — cleaning and validation](notebook/03-data-cleaning-and-transformation/README.md) and [Stage 4 — financial modelling and reconciliation](notebook/04-data-modelling-and-analytics/README.md).
+These are implemented SQL definitions; execution and reconciliation against populated source data are documented separately. Technical implementation is covered in [Stage 3 — cleaning and validation](notebook/03_data_cleaning_and_transformation/README.md) and [Stage 4 — financial modelling and reconciliation](notebook/04_data_modelling_and_analytics/README.md).
 
 The project evaluates complementary measures:
 
@@ -200,7 +200,7 @@ The main decisions at this stage are which reporting years to examine, which acc
 
 **Output:** Six identified source workbooks and a documented source/accounting scope.
 
-**Technical notebook:** [Stage 1 — Data Sourcing](notebook/01-data-sourcing/README.md), including source detail, publication conventions and file provenance.
+**Technical notebook:** [Stage 1 — Data Sourcing](notebook/01_data_sourcing/README.md), including source detail, publication conventions and file provenance.
 
 ---
 
@@ -214,7 +214,7 @@ The process also captures the financial year, trust type, source filename and SH
 
 **Verified output:** 4,239,680 Bronze source rows were preserved, including CY, PY and blank amounts. The populated CY population promoted to Silver contained 2,210,974 facts. All six import audit records completed with zero source duplicates, fact-key collisions, ambiguous provider keys, duplicate provider mappings or unmatched populated rows.
 
-**Technical notebook:** [Stage 2 — Data Ingestion](notebook/02-data-ingestion/README.md), including workbook structure, raw tables and Python loading procedure.
+**Technical notebook:** [Stage 2 — Data Ingestion](notebook/02_data_ingestion/README.md), including workbook structure, raw tables and Python loading procedure.
 
 ---
 
@@ -228,7 +228,7 @@ Validated information is organised in the Silver layer, where providers and acco
 
 **Verified output:** 215 trust dimension rows and 2,210,974 fact rows. The final automated run recorded 18 passed checks, one non-critical reconciliation warning and zero critical failures in `data/processed/validation_report.csv`.
 
-**Technical notebook:** [Stage 3 — Data Cleaning & Transformation](notebook/03-data-cleaning-and-transformation/README.md), including cleaning routines, Silver promotion and validation checks.
+**Technical notebook:** [Stage 3 — Data Cleaning & Transformation](notebook/03_data_cleaning_and_transformation/README.md), including cleaning routines, Silver promotion and validation checks.
 
 ---
 
@@ -242,7 +242,7 @@ I treat **operating surplus**, **net surplus** and NHS England's published **sur
 
 **Verified output:** All nine views deployed successfully on MySQL 9.5. All 633 trust-years contain SoCI, SoFP and SoCF records. SoCI, SoFP and SoCF internal residuals are within £1k; four SoFP-to-SoCF closing-cash exceptions exceed £1k. All four are explained by bank overdrafts, which the SoFP excludes from cash and the SoCF nets off; after adding overdrafts back, no trust-year exceeds £1k ([workpaper, section 4.1](reports/nhs_financial_reconciliation.md#41-closing-cash-exceptions-explained-by-bank-overdrafts)).
 
-**Technical notebook:** [Stage 4 — Data Modelling & Analytics](notebook/04-data-modelling-and-analytics/README.md), including the star schema, SQL view definitions, KPI logic and diagnostic queries.
+**Technical notebook:** [Stage 4 — Data Modelling & Analytics](notebook/04_data_modelling_and_analytics/README.md), including the star schema, SQL view definitions, KPI logic and diagnostic queries.
 
 ---
 
@@ -256,7 +256,7 @@ Before loading these files into the reporting model, the exported totals, provid
 
 **Verified output:** Thirteen canonical files were regenerated in `data/processed/powerbi_export/`, including 633-row profit-and-loss, balance-sheet, cash-flow and statement-reconciliation files. Nine enriched analytical files were written separately to `data/processed/transformed/` so transformation and reporting scripts cannot overwrite one another.
 
-**Technical notebook:** [Stage 5 — Data Preparation for Reporting](notebook/05-data-preparation-for-reporting/README.md), including export files, grain and Power BI data-model preparation.
+**Technical notebook:** [Stage 5 — Data Preparation for Reporting](notebook/05_data_preparation_for_reporting/README.md), including export files, grain and Power BI data-model preparation.
 
 ---
 
@@ -270,7 +270,7 @@ The dashboard is **not yet published**. Its final results should be produced onl
 
 **Output:** Power BI modelling and report specifications; interactive publication remains pending.
 
-**Technical notebook:** [Stage 6 — Data Visualisation & Insights](notebook/06-data-visualisation-and-insights/README.md), including Power BI model guidance, proposed report pages and DAX references.
+**Technical notebook:** [Stage 6 — Data Visualisation & Insights](notebook/06_data_visualisation_and_insights/README.md), including Power BI model guidance, proposed report pages and DAX references.
 
 ---
 
@@ -503,7 +503,7 @@ Even in its current state, the repository demonstrates a coherent approach to ha
 - [SQL views](sql/views/) and [analysis SQL](sql/analysis/)
 - [Python ingestion, transformation and export](python/)
 - [Power BI model guide](power_bi/setup_guide.md) and [DAX](power_bi/dax_measures.md)
-- [Original full project documentation archive](docs/project-documentation-history-20261028.md)
+- [Original full project documentation archive](docs/project_documentation_history_20261028.md)
 
 ---
 

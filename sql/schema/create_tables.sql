@@ -32,7 +32,7 @@ CREATE TABLE nhs_bronze.stg_tac_raw (
     sub_code            VARCHAR(20)     NOT NULL,
     total               NUMERIC(14, 0)  NOT NULL, -- £000s
     -- load metadata
-    source_file         VARCHAR(200)    NOT NULL, -- e.g. TAC_NHS_trusts_2023-24.xlsx
+    source_file         VARCHAR(200)    NOT NULL, -- e.g. tac_nhs_trusts_2023_24.xlsx
     trust_type          VARCHAR(20)     NOT NULL, -- NHS_TRUST | FOUNDATION_TRUST
     financial_year      CHAR(7)         NOT NULL, -- e.g. 2023/24
     year_type           CHAR(2)         NOT NULL, -- CY (current year) | PY (prior year)

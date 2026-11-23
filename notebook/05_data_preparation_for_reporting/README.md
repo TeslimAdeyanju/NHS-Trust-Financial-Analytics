@@ -3,7 +3,7 @@
 **Implementation:** Export of curated Gold analytical views as CSVs for Power BI.
 
 > `data/processed/powerbi_export/` — populated by `python/reporting/export_for_powerbi.py`, which
-> queries the views and tables from [stage ④](../04-data-modelling-and-analytics/README.md) — connecting to `nhs_gold`,
+> queries the views and tables from [stage ④](../04_data_modelling_and_analytics/README.md) — connecting to `nhs_gold`,
 > fully-qualifying `nhs_silver.dim_trust`/`nhs_silver.dim_subcode` for the joins that need them — and
 > writes thirteen CSVs. This stage's only job is portability: turn a live database
 > dependency into flat files any tool — Power BI, a reviewer with no MySQL access — can consume.
@@ -93,7 +93,7 @@ query itself, so the CSV lands in **£millions**, not £000s:
 ROUND(SUM(total_income_000s) / 1000, 0) AS total_income_m,
 ```
 
-This is the one deliberate exception to the £000s rule established back in [stage ①](../01-data-sourcing/README.md):
+This is the one deliberate exception to the £000s rule established back in [stage ①](../01_data_sourcing/README.md):
 sector-level sums in £000s run to eight figures and stop being readable on a benchmarking chart axis.
 
 ---
@@ -116,14 +116,14 @@ sector-level sums in £000s run to eight figures and stop being readable on a be
 | `statement_reconciliation.csv` | `v_statement_reconciliation` | One row per trust per year — statement coverage and reconciliation residuals |
 | `sector_benchmarks.csv` | `v_kpis`, aggregated | One row per financial year per sector per trust type |
 
-Full column-by-column schema for each file is in `PROJECT_DOCUMENTATION.md`, stage ⑤.
+Full column-by-column schema for each file is in `project_documentation.md`, stage ⑤.
 
 ## Verified reporting outputs — 29 October 2026, reproduced 21 November 2026
 
 The completed export produced all thirteen reporting files successfully. A from-scratch rebuild on
 21 November 2026 produced the same row counts and identical amounts; the only differences were
 `organisation_name` values for six trusts, now taken from their latest year (see
-[stage ④](../04-data-modelling-and-analytics/README.md)):
+[stage ④](../04_data_modelling_and_analytics/README.md)):
 
 | Output group | Files | Verified rows |
 |---|---|---:|
@@ -161,9 +161,9 @@ rows.
 | File | What to Read |
 |------|-------------|
 | [python/reporting/export_for_powerbi.py](../../python/reporting/export_for_powerbi.py) | Full script — `export_query()` plus all twelve `export_*()` functions |
-| [PROJECT_DOCUMENTATION.md](../../PROJECT_DOCUMENTATION.md), stage ⑤ | The narrative version, plus the full per-file column schema and the Power BI model diagram |
+| [project_documentation.md](../../project_documentation.md), stage ⑤ | The narrative version, plus the full per-file column schema and the Power BI model diagram |
 
 ---
 
-*Previous: [Stage ④ — Data Modelling & Analytics](../04-data-modelling-and-analytics/README.md)*
-*Next: [Stage ⑥ — Data Visualisation & Insights](../06-data-visualisation-and-insights/README.md)*
+*Previous: [Stage ④ — Data Modelling & Analytics](../04_data_modelling_and_analytics/README.md)*
+*Next: [Stage ⑥ — Data Visualisation & Insights](../06_data_visualisation_and_insights/README.md)*
