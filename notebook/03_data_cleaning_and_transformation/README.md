@@ -215,9 +215,9 @@ within the same year *and* file type.
 ## Validation results
 
 Each run writes its post-load validation outcome (passed checks, warnings and critical failures) to
-`data/processed/validation_report.csv`. Results are not recorded here because they change with every rebuild. Open
-warnings, such as the SoFP-to-SoCF closing-cash differences explained by bank overdrafts (see
-[stage ④](../04_data_modelling_and_analytics/README.md)), stay visible in that report.
+`data/processed/validation_report.csv`. Results are not recorded here because they change with every rebuild. The SoFP-to-SoCF
+closing-cash check adds bank overdrafts back before comparing, so an overdraft is not reported as a warning (see
+[stage ④](../04_data_modelling_and_analytics/README.md)).
 
 A passed rule confirms
 that rule only; it does not replace the outstanding bridge to NHS England's official

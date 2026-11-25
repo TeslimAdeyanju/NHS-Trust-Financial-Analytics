@@ -82,13 +82,13 @@ explicitly:
 > \+ Bank overdrafts (`CCE0140`) + Drawdown in committed facility (`CCE0150`)
 > = Total cash and cash equivalents as in SoCF (`CCE0160`)
 
-The project's check (`cash_cross_statement_residual_000s` in `v_statement_reconciliation`) compares
-`BAL1240` with `SCF0355` directly, without the overdraft step, so any trust with an overdraft shows a
-residual equal to that overdraft.
+The project's original check (`cash_cross_statement_residual_000s` in `v_statement_reconciliation`)
+compared `BAL1240` with `SCF0355` directly, without the overdraft step, so any trust with an overdraft
+showed a residual equal to that overdraft. It has since been corrected (below).
 
 **The four exceptions** (£000):
 
-| Provider/year | SoFP cash (`BAL1240`) | Bank overdraft (`CCE0140`) | SoFP cash after overdraft | SoCF closing cash (`SCF0355`) | Residual now reported | Residual after bridge |
+| Provider/year | SoFP cash (`BAL1240`) | Bank overdraft (`CCE0140`) | SoFP cash after overdraft | SoCF closing cash (`SCF0355`) | Original residual | Residual after bridge (now reported) |
 |---|---:|---:|---:|---:|---:|---:|
 | Cambridge University Hospitals NHS Foundation Trust — 2021/22 | 224,151 | −135 | 224,016 | 224,016.35 | 134.65 | −0.35 |
 
@@ -109,12 +109,12 @@ thousands.
 | Trust-years with SoFP and SoCF cash both present | 633 |
 | Trust-years reporting a bank overdraft (`CCE0140` ≠ 0) | 5 |
 | Trust-years drawing on a committed facility (`CCE0150` ≠ 0) | 0 |
-| Exceptions above £1,000 — current check (`BAL1240 − SCF0355`) | 4 |
+| Exceptions above £1,000 — original check (`BAL1240 − SCF0355`) | 4 |
 | Exceptions above £1,000 — after adding overdraft and facility lines | **0** |
 | Largest absolute difference after the bridge | £926 (0.92561 in £000) |
 
 The fifth overdraft — Royal Cornwall Hospitals, 2021/22, £1,000 — produced a residual of exactly £1,000,
-which the current check passes because its tolerance is "more than £1,000".
+which the original check passed because its tolerance is "more than £1,000".
 
 **A trap in the cash note.** `TAC19 CCE` has two value columns, `A19CY01` and `A19CY02`. In 127
 trust-years (mostly foundation trusts) the trust reported its cash across both, so `A19CY01` alone
@@ -122,20 +122,19 @@ disagrees with the SoCF; the two columns summed agree in every case. Any query u
 both columns. No overdraft or facility amount appears in `A19CY02` in this dataset, but a corrected check
 should still sum both.
 
-**Recommended correction (not yet applied).** Change the closing-cash residual in
-`sql/views/v_statement_reconciliation.sql` to add the overdraft and committed-facility lines from
-`TAC19 CCE` (both columns) before comparing with `SCF0355`:
+**Correction applied.** The closing-cash residual in
+`sql/views/v_statement_reconciliation.sql` now adds the overdraft and committed-facility lines from
+`TAC19 CCE` (both columns, exposed as `cash_overdrafts_000s`) before comparing with `SCF0355`:
 
 ```sql
--- SoFP cash, plus overdrafts and committed-facility drawdowns (both TAC19 columns), less SoCF closing cash
-sofp.cash_and_cash_equivalents_000s
-  + COALESCE(cce.overdrafts_and_facility_000s, 0)
-  - socf.closing_cash_000s
+-- NULL if any input, or the whole TAC19 note, is missing; otherwise SoFP cash + overdrafts - SoCF cash
+CASE WHEN b.cash_and_cash_equivalents_000s IS NULL OR c.closing_cash_000s IS NULL OR n.org_code IS NULL THEN NULL
+ELSE b.cash_and_cash_equivalents_000s + n.cash_overdrafts_000s - c.closing_cash_000s END
+  AS cash_cross_statement_residual_000s
 ```
 
-With that change the validation check would pass for all 633 trust-years. Until it is made, the check will
-continue to report these four trust-years as a non-critical warning. That warning is expected and
-explained, not an open accounting question.
+With the correction deployed, the SoFP-to-SoCF closing-cash check passes on the correct basis. Check
+`data/processed/validation_report.csv` after each rebuild for the current result.
 
 **Reproduce:**
 
@@ -222,7 +221,7 @@ The final query intentionally surfaces duplicates for review: do not automatical
 - [x] Re-run ingestion and verify `CY` selection, duplicate keys, organisational mappings and missing statement measures.
 - [x] Export per-provider, per-year SoCI, SoFP, SoCF and statement-reconciliation components.
 - [x] Explain the four SoFP-to-SoCF closing-cash exceptions (bank overdrafts; see section 4.1).
-- [ ] Apply the overdraft bridge to `v_statement_reconciliation` so the closing-cash check passes on the correct basis.
+- [x] Apply the overdraft bridge to `v_statement_reconciliation` so the closing-cash check passes on the correct basis.
 - [ ] Obtain official consolidation/inter-provider/charitable adjustment amounts from the annual reports and reconcile the statutory lines.
 - [ ] Explain every material variance and year-on-year accounting-policy difference.
 - [ ] Reconcile the deficit flag to the **same** official measure and provider population.

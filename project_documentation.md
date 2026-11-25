@@ -293,9 +293,10 @@ python python/reporting/export_for_powerbi.py
 Load counts, audit results and validation outcomes are recorded by each run in `nhs_bronze.import_batch` and
 `data/processed/validation_report.csv`; they are not repeated here because they change with every rebuild.
 
-The SoFP-to-SoCF closing-cash exceptions above £1k are an accounting presentation difference, not a pipeline
-failure: the SoFP shows cash gross with overdrafts in borrowings, while the SoCF shows cash net of overdrafts.
-The trust-level analysis is in the
+The SoFP and SoCF closing-cash figures differ by design wherever a trust has a bank overdraft: the SoFP shows
+cash gross with overdrafts in borrowings, while the SoCF shows cash net of overdrafts. `v_statement_reconciliation`
+adds the `TAC19 CCE` overdraft lines back before comparing, so these are not reported as exceptions. The
+trust-level analysis is in the
 [reconciliation workpaper, section 4.1](reports/nhs_financial_reconciliation.md#41-closing-cash-exceptions-explained-by-bank-overdrafts).
 The broader accounting bridge to NHS England's published before-impairments-and-transfers balance remains open
 and must not be described as reconciled.
@@ -359,7 +360,7 @@ No number should be changed solely to match an external benchmark. Unresolved di
 | Source duplicates and provider mappings require verification on every load | May mask source duplication or exclude providers | Automated pre-write gate in place; check the audit record on every load |
 | Database credentials must not be embedded in scripts | Security exposure | Environment-based configuration implemented; rotate any previously exposed password |
 | Fresh populated-database run | Required for reproducibility | Re-run after each change and check `nhs_bronze.import_batch` and the validation report |
-| Four SoFP-to-SoCF closing-cash exceptions exceed £1k | Could be misread as unreconciled cash | Explained: all four are bank overdrafts (SoFP gross, SoCF net). Follow-up: add the `TAC19 CCE` overdraft bridge to `v_statement_reconciliation` so the check passes on the correct basis |
+| Four SoFP-to-SoCF closing-cash exceptions exceed £1k | Could be misread as unreconciled cash | Resolved: all four are bank overdrafts (SoFP gross, SoCF net). `v_statement_reconciliation` now adds the `TAC19 CCE` overdraft lines back, so the check runs on the correct basis |
 | Dashboard is not published | No user-facing interactive report to validate | Open |
 
 **Credential guidance:** all database scripts require an environment-supplied `DB_PASSWORD`; user, host and port also support environment overrides. Never commit real passwords, and rotate any password previously exposed in Git history.
@@ -419,7 +420,7 @@ A reproducible run should archive checksums of six TAC inputs, schema/script rev
 | --- | --- | --- |
 | Source discovery and file conventions | Stage 1–2 notes, ingestion script | Documented; source snapshot not bundled |
 | Python data ingestion and transformation | `python/ingestion/`, `python/transformation/` | Fresh run completed: six files loaded and nine enriched outputs generated |
-| Bronze/Silver/Gold MySQL architecture | `sql/schema/`, `sql/views/` | End-to-end database validation completed; 18 checks passed and one non-critical reconciliation warning remains |
+| Bronze/Silver/Gold MySQL architecture | `sql/schema/`, `sql/views/` | End-to-end database validation completed; all 19 checks pass |
 | Financial analytical SQL and KPIs | `sql/analysis/`, `v_kpis.sql` | Implemented definitions; accounting sign-off pending |
 | Financial reconciliation workpaper | [Reconciliation report](reports/nhs_financial_reconciliation.md) | Preliminary; final numerical bridge pending |
 | Curated export process | [Power BI export script](python/reporting/export_for_powerbi.py) | Thirteen canonical exports, including cash flow and statement reconciliation |
@@ -428,7 +429,7 @@ A reproducible run should archive checksums of six TAC inputs, schema/script rev
 
 ### Recommended order of completion
 
-1. ~~Investigate and explain the four SoFP-to-SoCF closing-cash exceptions.~~ Explained as bank overdrafts. Remaining: apply the overdraft bridge in `v_statement_reconciliation`.
+1. ~~Investigate and explain the four SoFP-to-SoCF closing-cash exceptions.~~ Explained as bank overdrafts; `v_statement_reconciliation` now applies the overdraft bridge.
 2. Complete the bridge from TAC measures to NHS England's official before-impairments-and-transfers balances.
 3. Recalculate financial analysis and amend the detailed [2023/24 review](reports/nhs_sector_financial_review_2324.md) where required.
 4. Produce and test a genuine Power BI report with reconciled values, then add screenshots and publication details.

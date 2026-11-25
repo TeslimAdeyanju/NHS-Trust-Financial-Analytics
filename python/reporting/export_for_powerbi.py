@@ -364,6 +364,7 @@ def export_statement_reconciliation(engine) -> None:
             CAST(soci_operating_residual_000s AS DOUBLE) AS soci_operating_residual_000s,
             CAST(sofp_equity_residual_000s AS DOUBLE) AS sofp_equity_residual_000s,
             CAST(socf_cash_movement_residual_000s AS DOUBLE) AS socf_cash_movement_residual_000s,
+            CAST(cash_overdrafts_000s AS DOUBLE) AS cash_overdrafts_000s,
             CAST(cash_cross_statement_residual_000s AS DOUBLE) AS cash_cross_statement_residual_000s
         FROM v_statement_reconciliation
         ORDER BY financial_year, org_code

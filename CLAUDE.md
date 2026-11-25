@@ -83,7 +83,10 @@ copies. `v_cash_flow` and `v_statement_reconciliation` exist only as standalone 
   stores correctly signed values in the raw data (liabilities negative) — no sign-flipping in the pivot
 - `v_cash_flow` — TAC05 SoCF operating, investing and financing flows, net cash movement and closing cash
 - `v_statement_reconciliation` — statement coverage flags and explicit SoCI, SoFP, SoCF and cross-statement
-  residuals; missing inputs remain null rather than being treated as passing checks
+  residuals; missing inputs remain null rather than being treated as passing checks. The closing-cash residual
+  adds bank overdrafts back (`TAC19 CCE` `CCE0140`/`CCE0150`, exposed as `cash_overdrafts_000s`) because the
+  SoFP reports cash gross and the SoCF net. `TAC19 CCE` has two value columns (`A19CY01`/`A19CY02`) that
+  must always be summed
 - `v_kpis` — joins income/expenditure/workforce views and computes EBITDA margin, pay % of income, cost
   per WTE, net surplus margin, plus RAG flags
 - `v_trust_annual_scorecard` — wide view combining everything, built for DirectQuery and ad-hoc SQL; used

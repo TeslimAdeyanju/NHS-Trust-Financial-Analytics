@@ -29,7 +29,7 @@ The Silver `fct_tac` remains long-form and source-code traceable. In the Gold la
 - **SoCI:** Patient-care income + other operating income + signed operating expenses − operating surplus.
 - **SoFP:** Total assets employed − total equity.
 - **SoCF:** Operating + investing + financing net flows − net change in cash.
-- **SoFP to SoCF:** Closing SoFP cash − closing SoCF cash.
+- **SoFP to SoCF:** Closing SoFP cash + bank overdrafts and committed-facility drawdowns (`TAC19 CCE`) − closing SoCF cash.
 
 A zero residual supports internal agreement **only if all required inputs and reporting definitions are correct**; null means unavailable and must not be silently treated as passing. Additional template-specific movements and accounting adjustments may have to be reconciled for opening/closing cash. These checks do **not** establish reconciliation to NHS England's national before-impairments-and-transfers performance measure.
 
@@ -43,12 +43,14 @@ in dependency order, ending with
 residuals. Cross-year comparisons and ratios require consistent denominators and confirmed sign
 conventions.
 
-Check the reconciliation view after every rebuild. SoFP-to-SoCF closing-cash exceptions above £1k are explained
-by bank overdrafts (see the reconciliation workpaper).
+Check the reconciliation view after every rebuild. The SoFP-to-SoCF check adds bank overdrafts back before
+comparing: the SoFP reports cash gross, with overdrafts in borrowings, while the SoCF reports cash net of
+overdrafts (IAS 7). The `TAC19 CCE` cash note bridges the two. `cash_overdrafts_000s` sums `CCE0140` and
+`CCE0150` across both of the note's value columns (`A19CY01`, `A19CY02`), and
+`cash_cross_statement_residual_000s` adds it back.
 
-**All four are bank overdrafts, not errors.** The SoFP reports cash gross, with overdrafts in borrowings;
-the SoCF reports cash net of overdrafts (IAS 7). The `TAC19 CCE` cash note bridges the two, and each
-residual equals the trust's overdraft (`CCE0140`) to within rounding:
+**Why the bridge is needed.** Before it was added, every closing-cash exception above £1k was a bank
+overdraft, and each residual equalled the trust's overdraft (`CCE0140`) to within rounding:
 
 | Provider/year exception | Closing-cash residual (£000) | Bank overdraft (£000) |
 |---|---:|---:|
@@ -57,10 +59,8 @@ residual equals the trust's overdraft (`CCE0140`) to within rounding:
 | Royal Cornwall Hospitals NHS Trust — 2023/24 | 5.00000 | −5 |
 | Tees, Esk and Wear Valleys NHS Foundation Trust — 2023/24 | 269.99410 | −270 |
 
-Adding the overdraft and committed-facility lines back leaves **no exception above £1k in any of the 633
-trust-years**. The view does not yet apply that bridge, so the validation warning still appears; correcting
-`cash_cross_statement_residual_000s` is a recorded follow-up. Full analysis, including a trap in the
-cash note's two value columns: [financial reconciliation workpaper, section 4.1](../../reports/nhs_financial_reconciliation.md#41-closing-cash-exceptions-explained-by-bank-overdrafts).
+Full analysis, including a trap in the cash note's two value columns:
+[financial reconciliation workpaper, section 4.1](../../reports/nhs_financial_reconciliation.md#41-closing-cash-exceptions-explained-by-bank-overdrafts).
 
 ---
 
