@@ -171,32 +171,6 @@ else happens. Rename a file and the pipeline mis-tags every row inside it — th
 | PY rows mixed with CY rows | Preserve both in Bronze; filter to CY only during Silver promotion |
 | Genuine fractional £000 amounts | Round only to the source's five-decimal precision and store as `DECIMAL(18,5)`; never coerce to whole thousands |
 
-## Verified ingestion run — 29 October 2026, reproduced 21 November 2026
-
-The six production workbooks were loaded into a freshly rebuilt MySQL environment. A second from-scratch
-rebuild on 21 November 2026 produced identical counts and an identical fact table, row for row. `source_rows` is the
-number preserved in Bronze after identifying-field checks; `fact_candidate_rows` is the populated CY
-population promoted to Silver.
-
-| Source workbook | Provider-list rows | Providers with populated CY facts | Source rows | Fact candidate rows |
-|---|---:|---:|---:|---:|
-| Foundation Trusts 2021/22 | 145 | 145 | 884,210 | 446,890 |
-| Foundation Trusts 2022/23 | 144 | 144 | 970,560 | 543,168 |
-| Foundation Trusts 2023/24 | 143 | 140 | 1,006,040 | 505,400 |
-| NHS Trusts 2021/22 | 70 | 70 | 432,950 | 217,280 |
-| NHS Trusts 2022/23 | 69 | 68 | 464,780 | 258,128 |
-| NHS Trusts 2023/24 | 68 | 66 | 481,140 | 240,108 |
-| **Total** | **639 annual provider rows** | — | **4,239,680** | **2,210,974** |
-
-The difference between provider-list rows and providers with populated facts is not an unmatched join:
-all populated CY rows resolved successfully. It reflects provider-list entries without populated CY facts
-in those files. Across the six workbooks, 131,858 populated amounts (CY and PY) contained genuine
-fractional £000 values, 67,357 of them in the promoted CY facts, which is why the warehouse uses
-five-decimal storage.
-
-Every file finished with `LOADED` status in `nhs_bronze.import_batch`, carrying its filename, SHA-256,
-row counts and integrity results.
-
 ---
 
 ## Stage ② Summary
@@ -209,7 +183,6 @@ row counts and integrity results.
 | Name in "All data", code in provider list   | Use deterministic normalisation and reviewed aliases to resolve ODS codes |
 | Column names differ in 2021/22              | Pipeline handles format changes silently                 |
 | Total in £000s                              | Never divide or multiply here — store as-is              |
-| Six-file live run                           | 4,239,680 Bronze rows; 2,210,974 populated CY facts      |
 
 ---
 

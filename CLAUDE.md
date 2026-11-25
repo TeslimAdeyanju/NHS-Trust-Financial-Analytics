@@ -195,3 +195,6 @@ than expecting them to be present after a fresh clone.
 - Do not use calendar-year grouping — always `financial_year`.
 - Do not present forecast/plan figures as actuals in `reports/` output — this dataset is actuals-only, so
   any forecast/budget figure is necessarily sourced from outside this pipeline and must be labelled.
+- Do not add dated "Verified run" or "reproduced on" sections, or hardcoded row counts and per-workbook load
+  tables, to the stage READMEs or other docs. The pipeline changes often, so those figures go stale. Point to
+  `nhs_bronze.import_batch` and the validation report as the source of truth instead.
