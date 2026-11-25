@@ -96,14 +96,14 @@ fingerprint and row counts, so there is an audit trail for every load, successfu
 
 Every function below is in [`python/ingestion/load_tac_data.py`](../../python/ingestion/load_tac_data.py)
 or its helper module [`source_integrity.py`](../../python/ingestion/source_integrity.py). For each of the
-six workbooks, `process_file()` runs the same eight steps:
+six workbooks, `process_file()` runs the same six steps:
 
-![The eight-step import pipeline run by process_file() for each workbook: record_import_batch("STARTED"), read_provider_list() and read_all_data(), validate() (any failure records "FAILED"), record_import_batch("VALIDATED"), load_staging() into Bronze, populate_dim_trust() and promote_to_fact() into Silver, and record_import_batch("LOADED").](../../docs/images/nhs_tac_financial_data_pipeline_infographic.png)
+![How load_tac_data.py processes each workbook: main() calls process_file() for every TAC_NHS_*.xlsx file; 01 record_import_batch() logs the file and its SHA-256 in nhs_bronze.import_batch; 02 read_provider_list() and read_all_data() read and standardise both sheets using source_integrity.py; 03 validate() checks the data, and any failure records FAILED and stops; 04 load_staging() replaces the file's slice of nhs_bronze; 05 populate_dim_trust() and promote_to_fact() load nhs_silver; 06 record_import_batch() records LOADED.](../../docs/images/load_tac_data_workflow.png)
 
-**Steps 1–5 are this stage**: they take a workbook from disk into Bronze. Steps 6–7, which move the data on
-into Silver, are covered in [stage ④](../04_data_modelling_and_analytics/README.md).
+**Steps 01–04 are this stage**: they take a workbook from disk into Bronze. Step 05, which moves the data on
+into Silver, is covered in [stage ④](../04_data_modelling_and_analytics/README.md).
 
-### Step 1 — Log the file before reading it
+### Step 01 — Log the file before reading it
 
 `record_import_batch("STARTED")` writes the file name, size, financial year, trust type and a SHA-256
 fingerprint of the file's exact bytes to `nhs_bronze.import_batch`. The same row is updated as the file
@@ -114,9 +114,10 @@ of the workbook it came from.
 The illustrative workbook (`TAC_illustrative_2023-24.xlsx`) holds SubCode labels, not trust data, so the
 loader skips it.
 
-### Step 2 — Read and standardise both sheets
+### Step 02 — Read and standardise both sheets
 
-Each workbook is read entirely in memory. Nothing is written to the database until step 4.
+Each workbook is read entirely in memory. Apart from the audit log entry, nothing is written to the
+database until step 04.
 
 **The provider list** (`read_provider_list()`) is the lookup that turns trust names into ODS codes. Its
 columns are renamed to the warehouse's names, rows without a name or code are dropped, text is trimmed,
@@ -124,13 +125,18 @@ and only rows whose code is exactly three letters or digits are kept. That remov
 at the bottom of the sheet:
 
 ```python
+# Rename the provider-list columns to the warehouse's names
 df = df.rename(columns={
     "Full name of Provider": "organisation_name",
-    "NHS code":             "org_code",
-    "Region":               "region",
-    "Sector":               "sector",
+    "NHS code":              "org_code",
+    "Region":                "region",
+    "Sector":                "sector",
 })
+
+# Drop rows with no name or no code
 df = df.dropna(subset=["org_code", "organisation_name"])
+
+# Keep only real ODS codes: exactly three letters or digits
 df = df[df["org_code"].str.fullmatch(r"[A-Za-z0-9]{3}", na=False)]
 ```
 
@@ -139,16 +145,28 @@ df = df[df["org_code"].str.fullmatch(r"[A-Za-z0-9]{3}", na=False)]
 *A. Read with explicit types,* so codes stay as text and amounts as numbers:
 
 ```python
-sheet_name = find_sheet_name(path, "All data")   # tolerates "All data" vs "All Data"
-df = pd.read_excel(path, sheet_name=sheet_name, dtype={
-    "OrganisationName": str, "WorkSheetName": str, "TableID": "Int64",
-    "MainCode": str, "RowNumber": "Int64", "SubCode": str, "Total": float,
-})
+# Find the sheet whatever its capitalisation ("All data" or "All Data")
+sheet_name = find_sheet_name(path, "All data")
+
+df = pd.read_excel(
+    path,
+    sheet_name=sheet_name,
+    dtype={
+        "OrganisationName": str,
+        "WorkSheetName":    str,
+        "TableID":          "Int64",   # whole number that allows blanks
+        "MainCode":         str,
+        "RowNumber":        "Int64",
+        "SubCode":          str,
+        "Total":            float,     # the amount, in £000s
+    },
+)
 ```
 
 *B. Standardise column names* across template years (2021/22 used different headers):
 
 ```python
+# 2021/22 header         →  standard header
 df = df.rename(columns={
     "Organisation Name": "OrganisationName",
     "Value number":      "Total",
@@ -160,8 +178,17 @@ df = df.rename(columns={
 fields are present. A blank **amount** is kept, because a blank and a zero mean different things:
 
 ```python
-df = df.dropna(subset=["organisation_name", "worksheet_name", "table_id",
-                       "main_code", "row_num", "sub_code"])
+# A row must have all six identifying fields; a blank amount is allowed
+df = df.dropna(subset=[
+    "organisation_name",
+    "worksheet_name",
+    "table_id",
+    "main_code",
+    "row_num",
+    "sub_code",
+])
+
+# Remove stray spaces (the same is done for worksheet, MainCode and SubCode)
 df["organisation_name"] = df["organisation_name"].astype(str).str.strip()
 ```
 
@@ -169,7 +196,8 @@ df["organisation_name"] = df["organisation_name"].astype(str).str.strip()
 kept:
 
 ```python
-df["year_type"] = df["main_code"].apply(infer_year_type)   # "PY" if the code contains "PY", else "CY"
+# "PY" if the MainCode contains "PY" (e.g. A02PY01), otherwise "CY" (e.g. A02CY01)
+df["year_type"] = df["main_code"].apply(infer_year_type)
 ```
 
 *E. Convert amounts and attach metadata.* Amounts are kept to the source's five decimal places. If any
@@ -177,15 +205,22 @@ value isn't a number at all, the whole file is rejected rather than silently tur
 then gets its normalised trust-name key, source file, fingerprint, trust type and financial year:
 
 ```python
+# Convert amounts to numbers; anything that isn't a number becomes NaN here...
 numeric_total = pd.to_numeric(df["total"], errors="coerce")
+
+# ...so stop if a value that was present failed to convert: don't guess
 if (df["total"].notna() & numeric_total.isna()).any():
-    raise ValueError("non-numeric Total values")      # stop, don't guess
-df["total"]             = numeric_total.round(5)
+    raise ValueError("non-numeric Total values")
+
+# Keep the source's five decimal places
+df["total"] = numeric_total.round(5)
+
+# Attach the matching key and where the row came from
 df["provider_name_key"] = df["organisation_name"].map(provider_name_key)
 df["source_file"]       = source_file
 df["source_sha256"]     = source_sha256
-df["trust_type"]        = trust_type                 # from the file name
-df["financial_year"]    = financial_year             # from the file name
+df["trust_type"]        = trust_type        # from the file name
+df["financial_year"]    = financial_year    # from the file name
 ```
 
 **The trust-name key** (`provider_name_key()` in `source_integrity.py`) is how a name in the financial data
@@ -194,11 +229,20 @@ applies the small reviewed alias list:
 
 ```python
 def normalise_provider_name(value: str) -> str:
-    text = unicodedata.normalize("NFKC", str(value)).casefold()   # one form of each character, lower case
-    text = text.replace("&", " and ")                              # "&" and "and" match
-    text = text.replace("’", "'").replace("‘", "'")                # curly and straight apostrophes match
-    text = re.sub(r"[^a-z0-9]+", " ", text)                        # punctuation becomes a space
-    return " ".join(text.split())                                  # collapse repeated spaces
+    # One standard form of each character, all lower case
+    text = unicodedata.normalize("NFKC", str(value)).casefold()
+
+    # "&" and "and" should match
+    text = text.replace("&", " and ")
+
+    # Curly and straight apostrophes should match
+    text = text.replace("’", "'").replace("‘", "'")
+
+    # Any run of punctuation or symbols becomes a single space
+    text = re.sub(r"[^a-z0-9]+", " ", text)
+
+    # Collapse repeated spaces and trim the ends
+    return " ".join(text.split())
 ```
 
 | Published name | Key used for matching |
@@ -207,7 +251,7 @@ def normalise_provider_name(value: str) -> str:
 | `King’s College Hospital NHS Foundation Trust` | `king s college hospital nhs foundation trust` |
 | `South Warwickshire University NHS Foundation Trust` | `south warwickshire nhs foundation trust` (via the alias list) |
 
-### Steps 3 and 4 — The quality gate: `validate()`
+### Step 03 — The quality gate: `validate()`
 
 The gate runs on the in-memory data, before anything is written:
 
@@ -224,16 +268,35 @@ Every check is critical. If any fails, the whole file is rejected, nothing is wr
 records `FAILED` with the reason. If all pass, `import_batch` records `VALIDATED` along with the row counts
 the gate calculated.
 
-### Step 5 — Write to Bronze: `load_staging()`
+### Step 04 — Write to Bronze: `load_staging()`
 
 The validated data replaces this file's slice of Bronze, inside one transaction:
 
 ```python
-with engine.begin() as conn:   # one transaction: both tables replaced together, or neither
-    conn.execute(text("DELETE FROM stg_tac_raw       WHERE financial_year = :fy AND trust_type = :tt"), params)
-    conn.execute(text("DELETE FROM stg_provider_list WHERE financial_year = :fy AND trust_type = :tt"), params)
-    provider_df.to_sql("stg_provider_list", conn, if_exists="append", index=False, chunksize=500)
-    data_df.to_sql("stg_tac_raw",           conn, if_exists="append", index=False, chunksize=2000)
+scope = {"fy": financial_year, "tt": trust_type}
+
+# One transaction: both tables are replaced together, or neither is
+with engine.begin() as conn:
+
+    # 1. Remove this file's previous slice (one financial year, one trust type)
+    conn.execute(
+        text("DELETE FROM stg_tac_raw WHERE financial_year = :fy AND trust_type = :tt"),
+        scope,
+    )
+    conn.execute(
+        text("DELETE FROM stg_provider_list WHERE financial_year = :fy AND trust_type = :tt"),
+        scope,
+    )
+
+    # 2. Insert the validated data, in batches
+    provider_df.to_sql(
+        "stg_provider_list", conn,
+        if_exists="append", index=False, chunksize=500,
+    )
+    data_df.to_sql(
+        "stg_tac_raw", conn,
+        if_exists="append", index=False, chunksize=2000,
+    )
 ```
 
 The delete is limited to one financial year and one trust type, so reloading a file never touches the
@@ -269,25 +332,31 @@ The full Bronze table definition:
 
 ```sql
 CREATE TABLE stg_tac_raw (
-    id                BIGINT          AUTO_INCREMENT PRIMARY KEY,
-    organisation_name VARCHAR(300)    NOT NULL,   -- name as published; ODS code is attached in stage ④
-    worksheet_name    VARCHAR(50)     NOT NULL,
-    table_id          SMALLINT        NOT NULL,
-    main_code         VARCHAR(20)     NOT NULL,
-    row_num           SMALLINT        NOT NULL,
-    sub_code          VARCHAR(20)     NOT NULL,
-    total             DECIMAL(18,5),              -- £000s; keeps decimals, and NULL for a blank amount
-    provider_name_key VARCHAR(300)    NOT NULL,
-    source_file       VARCHAR(200)    NOT NULL,
-    source_sha256     CHAR(64)        NOT NULL,
-    trust_type        VARCHAR(20)     NOT NULL,
-    financial_year    CHAR(7)         NOT NULL,
-    year_type         CHAR(2)         NOT NULL,   -- CY | PY
-    load_ts           TIMESTAMP       DEFAULT CURRENT_TIMESTAMP,
-    INDEX idx_stg_org_year     (organisation_name(100), financial_year),
-    INDEX idx_stg_provider_key (provider_name_key(100), financial_year, trust_type),
-    INDEX idx_stg_sub_code     (sub_code),
-    INDEX idx_stg_year_type    (financial_year, year_type)
+    id                 BIGINT        AUTO_INCREMENT PRIMARY KEY,
+
+    -- The source row, as published
+    organisation_name  VARCHAR(300)  NOT NULL,   -- ODS code is attached in stage ④
+    worksheet_name     VARCHAR(50)   NOT NULL,
+    table_id           SMALLINT      NOT NULL,
+    main_code          VARCHAR(20)   NOT NULL,
+    row_num            SMALLINT      NOT NULL,
+    sub_code           VARCHAR(20)   NOT NULL,
+    total              DECIMAL(18,5),            -- £000s; NULL means a blank amount
+
+    -- Added by this stage
+    provider_name_key  VARCHAR(300)  NOT NULL,   -- normalised name, used for matching
+    source_file        VARCHAR(200)  NOT NULL,
+    source_sha256      CHAR(64)      NOT NULL,
+    trust_type         VARCHAR(20)   NOT NULL,
+    financial_year     CHAR(7)       NOT NULL,
+    year_type          CHAR(2)       NOT NULL,   -- CY or PY
+    load_ts            TIMESTAMP     DEFAULT CURRENT_TIMESTAMP,
+
+    -- Indexes for the joins and filters used in stage ④
+    INDEX idx_stg_org_year      (organisation_name(100), financial_year),
+    INDEX idx_stg_provider_key  (provider_name_key(100), financial_year, trust_type),
+    INDEX idx_stg_sub_code      (sub_code),
+    INDEX idx_stg_year_type     (financial_year, year_type)
 ) ENGINE=InnoDB;
 ```
 
