@@ -118,28 +118,9 @@ sector-level sums in £000s run to eight figures and stop being readable on a be
 
 Full column-by-column schema for each file is in `project_documentation.md`, stage ⑤.
 
-## Verified reporting outputs — 29 October 2026, reproduced 21 November 2026
-
-The completed export produced all thirteen reporting files successfully. A from-scratch rebuild on
-21 November 2026 produced the same row counts and identical amounts; the only differences were
-`organisation_name` values for six trusts, now taken from their latest year (see
-[stage ④](../04_data_modelling_and_analytics/README.md)):
-
-| Output group | Files | Verified rows |
-|---|---|---:|
-| Dimensions | `dim_trust.csv`, `dim_financial_year.csv` | 215; 5 |
-| Trust/year summaries | I&E, expenditure, workforce, KPIs, P&L, balance sheet, cash flow, reconciliation | 633 each |
-| Line-item detail | `income_detail.csv`, `expenditure_detail.csv` | 9,271; 12,027 |
-| Sector benchmark | `sector_benchmarks.csv` | 30 |
-
-The cash-flow and reconciliation outputs contain no duplicate `(org_code, financial_year)` keys. The
-reconciliation file has complete SoCI, SoFP and SoCF coverage for all 633 rows.
-
 The enrichment script writes a separate nine-file set to `data/processed/transformed/`. This separation
 is intentional: transformed KPI flags, income mix and year-on-year measures must not be overwritten by
-the canonical Power BI export process. Its verified outputs include 633-row KPI, I&E, expenditure and
-workforce tables, 13,069 income-detail rows, 12,660 expenditure-detail rows and 15 sector/year benchmark
-rows.
+the canonical Power BI export process.
 
 ---
 

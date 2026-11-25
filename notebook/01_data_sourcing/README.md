@@ -45,24 +45,9 @@ Two conventions established at the source apply to every table, column, and file
   [stage ⑤](../05_data_preparation_for_reporting/README.md)). £000 does not imply whole numbers: the
   verified sources contain values to five decimal places.
 
-## Verified source manifest — 29 October 2026, reproduced 21 November 2026
-
-These are the exact production workbook bytes used by the completed source-to-report run. A from-scratch
-rebuild on 21 November 2026 recorded the same six hashes. The workbooks are git-ignored, so a future
-reproduction should calculate SHA-256 before loading and compare it with this manifest rather than relying
-on filenames alone.
-
-| Workbook | Approx. size | SHA-256 |
-|---|---:|---|
-| `tac_nhs_foundation_trusts_2021_22.xlsx` | 33 MB | `e70b6db73f8662fe821d4a0e84c09e5d50e5f3cfd024a906de54351a0ac5aaed` |
-| `tac_nhs_foundation_trusts_2022_23.xlsx` | 36 MB | `082722c3120dad6a80a6c7402306553213c4ea554b586b62f8b0fd6769f5037c` |
-| `tac_nhs_foundation_trusts_2023_24.xlsx` | 38 MB | `358657e90e3e216d3d3cc4cf634a351ce24228460ac6cf8aa19ab6731e8b159c` |
-| `tac_nhs_trusts_2021_22.xlsx` | 16 MB | `6b803ea88c3dc9c7b4185173b48c230891f590d9fafb11fa238544e211a1186d` |
-| `tac_nhs_trusts_2022_23.xlsx` | 20 MB | `1d5c8e30e64e598a0ca83a55c803aab19583ff812e803e663dd9407cdce751fd` |
-| `tac_nhs_trusts_2023_24.xlsx` | 18 MB | `80330fd3dadaacea8746f7de6335175e0e81437404b17ccd66af9ac21d883e91` |
-
-The ingestion audit stores the same SHA-256 alongside file size, financial year, trust type, row counts,
-integrity results and final load status in `nhs_bronze.import_batch`.
+The ingestion audit stores the SHA-256 of each source workbook alongside file size, financial year, trust type,
+row counts, integrity results and final load status in `nhs_bronze.import_batch`. The workbooks are git-ignored, so
+recalculate SHA-256 before loading and compare it with that audit rather than relying on filenames alone.
 
 ## No Code Here — By Design
 

@@ -212,25 +212,14 @@ within the same year *and* file type.
 | DELETE + INSERT in staging | Scoped to `(financial_year, trust_type)`, one transaction | Idempotent reloads without touching other files' rows |
 | No FK, no UNIQUE KEY on `stg_tac_raw` | Staging preserves every source row (CY, PY, blanks); `validate()` rejects duplicates before writing | Source evidence is kept; key integrity is enforced again in `fct_tac` |
 
-## Verified validation results — 29 October 2026, reproduced 21 November 2026
+## Validation results
 
-The completed run produced 2,210,974 Silver facts and 215 trust dimension rows. The post-load validation
-report recorded **18 passed checks, one non-critical warning and zero critical failures**. A from-scratch
-rebuild on 21 November 2026 produced an identical report:
+Each run writes its post-load validation outcome (passed checks, warnings and critical failures) to
+`data/processed/validation_report.csv`. Results are not recorded here because they change with every rebuild. Open
+warnings, such as the SoFP-to-SoCF closing-cash differences explained by bank overdrafts (see
+[stage ④](../04_data_modelling_and_analytics/README.md)), stay visible in that report.
 
-- all three expected financial years were present;
-- no null organisation codes, duplicate fact keys or orphan provider codes were found;
-- 2023/24 total income was £129.2bn;
-- 124 trusts met the project's operating-deficit definition in 2023/24;
-- average 2023/24 EBITDA margin was 3.6%;
-- average acute-sector pay-to-income was 64.9%;
-- all 633 trust-years contained SoCI, SoFP and SoCF records;
-- SoCI, SoFP and SoCF internal residuals were within £1k;
-- four SoFP-to-SoCF closing-cash differences exceeded £1k and remain visible as a warning. All four are
-  bank overdrafts, which the SoFP excludes from cash and the SoCF nets off (see
-  [stage ④](../04_data_modelling_and_analytics/README.md)).
-
-The machine-readable result is written to `data/processed/validation_report.csv`. A passed rule confirms
+A passed rule confirms
 that rule only; it does not replace the outstanding bridge to NHS England's official
 before-impairments-and-transfers measure.
 

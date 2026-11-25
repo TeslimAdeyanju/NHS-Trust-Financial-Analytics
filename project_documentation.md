@@ -4,7 +4,7 @@
 
 This document explains the business question, NHS accounting context, implemented data architecture, six-stage processing lifecycle, analytical measures, published-account reconciliation and outstanding validation work. It is written for readers who want to understand **what the project does, why each design choice matters, how to reproduce it and which conclusions remain provisional**.
 
-**Project status (29 October 2026):** The source-to-report pipeline has been freshly executed across all six TAC workbooks: 2,210,974 facts, 215 trusts, 633 trust-years, 18 passed validation checks, one non-critical warning, thirteen canonical exports and nine enriched outputs. A from-scratch rebuild on 21 November 2026 reproduced these results exactly. The final interactive Power BI dashboard has **not been published**, and the project's measures have **not yet been bridged fully** to NHS England's consolidated before-impairments-and-transfers balances.
+**Project status:** The source-to-report pipeline is implemented across all six TAC workbooks. The final interactive Power BI dashboard has **not been published**, and the project's measures have **not yet been bridged fully** to NHS England's consolidated before-impairments-and-transfers balances.
 
 ## Contents
 
@@ -29,7 +29,7 @@ Detailed implementations remain in the stage-specific technical notebooks linked
 
 ### Part III — Findings, Validation and Project Outcomes
 
-- [Verified End-to-End Run](#verified-end-to-end-run--29-october-2026)
+- [Running the Pipeline](#running-the-pipeline)
 - [Financial Findings and Reconciliation](#financial-findings-and-reconciliation)
 - [Data Quality, Auditability and Limitations](#data-quality-auditability-and-limitations)
 - [Reproducibility and Operational Workflow](#reproducibility-and-operational-workflow)
@@ -210,9 +210,8 @@ The main decisions at this stage are which reporting years to examine, which acc
 
 I designed the ingestion process to retain the original Excel files as the fixed source snapshot and use Python to load the relevant financial records and provider lists into the MySQL Bronze layer. Keeping the raw inputs separate from transformed records provides a reference point when discrepancies appear later in the analysis.
 
-The process also captures the financial year, trust type, source filename and SHA-256. This is essential because the project combines several annual releases that do not have identical column naming or organisational coverage. The completed fresh run verified scoped, repeatable loading across all six workbook/year/type combinations.
+The process also captures the financial year, trust type, source filename and SHA-256. This is essential because the project combines several annual releases that do not have identical column naming or organisational coverage.
 
-**Verified output:** 4,239,680 Bronze source rows were preserved, including CY, PY and blank amounts. The populated CY population promoted to Silver contained 2,210,974 facts. All six import audit records completed with zero source duplicates, fact-key collisions, ambiguous provider keys, duplicate provider mappings or unmatched populated rows.
 
 **Technical notebook:** [Stage 2 — Data Ingestion](notebook/02_data_ingestion/README.md), including workbook structure, raw tables and Python loading procedure.
 
@@ -226,7 +225,6 @@ I standardise reporting fields, normalise organisation identifiers and distingui
 
 Validated information is organised in the Silver layer, where providers and accounting transactions can be analysed across years. Outstanding issues must remain visible in validation results rather than be silently corrected.
 
-**Verified output:** 215 trust dimension rows and 2,210,974 fact rows. The final automated run recorded 18 passed checks, one non-critical reconciliation warning and zero critical failures in `data/processed/validation_report.csv`.
 
 **Technical notebook:** [Stage 3 — Data Cleaning & Transformation](notebook/03_data_cleaning_and_transformation/README.md), including cleaning routines, Silver promotion and validation checks.
 
@@ -240,7 +238,7 @@ The model separates provider information from detailed TAC financial records. Ni
 
 I treat **operating surplus**, **net surplus** and NHS England's published **surplus/deficit before impairments and transfers** as distinct measures. That distinction became especially important when the initial portfolio figures did not align with the official published financial balances. EBITDA and other RAG labels are analytical aids, not automatic NHS regulatory ratings.
 
-**Verified output:** All nine views deployed successfully on MySQL 9.5. All 633 trust-years contain SoCI, SoFP and SoCF records. SoCI, SoFP and SoCF internal residuals are within £1k; four SoFP-to-SoCF closing-cash exceptions exceed £1k. All four are explained by bank overdrafts, which the SoFP excludes from cash and the SoCF nets off; after adding overdrafts back, no trust-year exceeds £1k ([workpaper, section 4.1](reports/nhs_financial_reconciliation.md#41-closing-cash-exceptions-explained-by-bank-overdrafts)).
+The SoFP-to-SoCF closing-cash exceptions above £1k are explained by bank overdrafts, which the SoFP excludes from cash and the SoCF nets off ([workpaper, section 4.1](reports/nhs_financial_reconciliation.md#41-closing-cash-exceptions-explained-by-bank-overdrafts)).
 
 **Technical notebook:** [Stage 4 — Data Modelling & Analytics](notebook/04_data_modelling_and_analytics/README.md), including the star schema, SQL view definitions, KPI logic and diagnostic queries.
 
@@ -254,7 +252,7 @@ I separate reporting preparation from analytical calculation so that Power BI co
 
 Before loading these files into the reporting model, the exported totals, provider-year grain, relationship keys and units must be checked against the database. This is necessary to avoid inflating amounts when different fact tables are joined or accidentally aggregating percentage measures.
 
-**Verified output:** Thirteen canonical files were regenerated in `data/processed/powerbi_export/`, including 633-row profit-and-loss, balance-sheet, cash-flow and statement-reconciliation files. Nine enriched analytical files were written separately to `data/processed/transformed/` so transformation and reporting scripts cannot overwrite one another.
+Thirteen canonical files are written to `data/processed/powerbi_export/`. Nine enriched analytical files are written separately to `data/processed/transformed/` so transformation and reporting scripts cannot overwrite one another.
 
 **Technical notebook:** [Stage 5 — Data Preparation for Reporting](notebook/05_data_preparation_for_reporting/README.md), including export files, grain and Power BI data-model preparation.
 
@@ -276,18 +274,14 @@ The dashboard is **not yet published**. Its final results should be produced onl
 
 # PART III — FINDINGS, VALIDATION AND PROJECT OUTCOMES
 
-## Verified End-to-End Run — 29 October 2026
+## Running the Pipeline
 
-The revised pipeline was executed from source workbook to reporting export against a fresh local MySQL
-9.5 environment using Python 3.14. Before rebuilding, the previous three project databases were archived
-to a completed 706 MB SQL dump. MySQL 9 requires `--commands` when a batch script uses the client-side
-`SOURCE` command:
+Build a fresh local MySQL environment, then run the pipeline from source workbook to reporting export. MySQL 9
+requires `--commands` when a batch script uses the client-side `SOURCE` command:
 
 ```bash
 mysql --commands -u root -p < sql/schema/create_tables_mysql.sql
 ```
-
-The operational sequence then completed successfully:
 
 ```bash
 python python/ingestion/load_tac_data.py
@@ -296,37 +290,15 @@ python python/transformation/transform_tac_data.py
 python python/reporting/export_for_powerbi.py
 ```
 
-| Control point | Verified result |
-|---|---:|
-| Production source workbooks | 6 |
-| Bronze source rows | 4,239,680 |
-| Populated CY facts | 2,210,974 |
-| Trust dimension rows | 215 |
-| Trust/year analytical rows | 633 |
-| Gold analytical views | 9 |
-| Automated validation | 18 passed, 1 warning, 0 critical |
-| Canonical Power BI exports | 13 |
-| Enriched transformation outputs | 9 |
-| Regression tests | 8 passed |
+Load counts, audit results and validation outcomes are recorded by each run in `nhs_bronze.import_batch` and
+`data/processed/validation_report.csv`; they are not repeated here because they change with every rebuild.
 
-All source duplicate, fact-key collision, provider ambiguity, provider duplication and unmatched-provider
-counts were zero. The single validation warning represents four SoFP-to-SoCF closing-cash residuals above
-£1k; it is an accounting presentation difference, not a pipeline failure. Each residual equals the trust's
-bank overdraft in the `TAC19 CCE` cash note: the SoFP shows cash gross with overdrafts in borrowings, while
-the SoCF shows cash net of overdrafts.
-
-| Provider/year exception | Closing-cash residual (£000) | Bank overdraft (£000) |
-|---|---:|---:|
-| Cambridge University Hospitals NHS Foundation Trust — 2021/22 | 134.65240 | −135 |
-| Royal Cornwall Hospitals NHS Trust — 2022/23 | 3.00000 | −3 |
-| Royal Cornwall Hospitals NHS Trust — 2023/24 | 5.00000 | −5 |
-| Tees, Esk and Wear Valleys NHS Foundation Trust — 2023/24 | 269.99410 | −270 |
-
-With overdrafts added back, none of the 633 trust-years has a closing-cash difference above £1k; the full
-analysis is in the [reconciliation workpaper, section 4.1](reports/nhs_financial_reconciliation.md#41-closing-cash-exceptions-explained-by-bank-overdrafts).
-The source-to-report implementation can therefore be described as technically reproduced, with all three
-statements internally consistent. The broader accounting bridge to NHS England's published
-before-impairments-and-transfers balance remains open and must not be described as reconciled.
+The SoFP-to-SoCF closing-cash exceptions above £1k are an accounting presentation difference, not a pipeline
+failure: the SoFP shows cash gross with overdrafts in borrowings, while the SoCF shows cash net of overdrafts.
+The trust-level analysis is in the
+[reconciliation workpaper, section 4.1](reports/nhs_financial_reconciliation.md#41-closing-cash-exceptions-explained-by-bank-overdrafts).
+The broader accounting bridge to NHS England's published before-impairments-and-transfers balance remains open
+and must not be described as reconciled.
 
 ## Financial Findings and Reconciliation
 
@@ -384,9 +356,9 @@ No number should be changed solely to match an external benchmark. Unresolved di
 | The official-balance measure is not yet reconciled to project-generated outputs | Published and model-derived figures must not be combined as if equivalent | Open |
 | Operating-based `is_deficit` differs from official before-impairments-and-transfers classification | Incorrect comparison of deficit counts | Open |
 | Provider population may be filtered by positive income or altered by source coverage | Year-on-year denominators may not match NHS England | Open |
-| Source duplicates and provider mappings require verification on every load | May mask source duplication or exclude providers | Automated pre-write gate passed for all six workbooks in the fresh database run |
+| Source duplicates and provider mappings require verification on every load | May mask source duplication or exclude providers | Automated pre-write gate in place; check the audit record on every load |
 | Database credentials must not be embedded in scripts | Security exposure | Environment-based configuration implemented; rotate any previously exposed password |
-| Fresh populated-database run | Required for reproducibility | Completed for all six workbooks: 2,210,974 fact rows, 215 trusts, and all source-integrity gates passed |
+| Fresh populated-database run | Required for reproducibility | Re-run after each change and check `nhs_bronze.import_batch` and the validation report |
 | Four SoFP-to-SoCF closing-cash exceptions exceed £1k | Could be misread as unreconciled cash | Explained: all four are bank overdrafts (SoFP gross, SoCF net). Follow-up: add the `TAC19 CCE` overdraft bridge to `v_statement_reconciliation` so the check passes on the correct basis |
 | Dashboard is not published | No user-facing interactive report to validate | Open |
 
@@ -431,7 +403,7 @@ python python/transformation/transform_tac_data.py
 python python/reporting/export_for_powerbi.py
 ```
 
-The revised schema, source-integrity controls and canonical view deployment completed a fresh MySQL integration run: 2,210,974 facts, 215 trusts and 633 trust-years. Reproduction still requires the six local source workbooks, MySQL and environment-supplied credentials; rotate exposed historical credentials.
+Reproduction still requires the six local source workbooks, MySQL and environment-supplied credentials; rotate exposed historical credentials.
 
 The SQL views under `sql/views/` and schema scripts under `sql/schema/` must be applied in dependency order. The extensive `create_tables_mysql.sql` includes database objects and must be reviewed for destructive `DROP` operations before running against any valued database. The project should eventually offer a versioned setup script and automated integration test that confirm schema, ingestion, uniqueness, financial mapping, export consistency and replay behaviour.
 
@@ -450,14 +422,13 @@ A reproducible run should archive checksums of six TAC inputs, schema/script rev
 | Bronze/Silver/Gold MySQL architecture | `sql/schema/`, `sql/views/` | End-to-end database validation completed; 18 checks passed and one non-critical reconciliation warning remains |
 | Financial analytical SQL and KPIs | `sql/analysis/`, `v_kpis.sql` | Implemented definitions; accounting sign-off pending |
 | Financial reconciliation workpaper | [Reconciliation report](reports/nhs_financial_reconciliation.md) | Preliminary; final numerical bridge pending |
-| Curated export process | [Power BI export script](python/reporting/export_for_powerbi.py) | Verified: thirteen current exports, including cash flow and statement reconciliation |
+| Curated export process | [Power BI export script](python/reporting/export_for_powerbi.py) | Thirteen canonical exports, including cash flow and statement reconciliation |
 | Power BI modelling and DAX design | `power_bi/` | Design assets provided; published dashboard pending |
 | Full reproducible validated case study | Source-to-report run, reconciled results, verified dashboard | Technical source-to-report run complete; accounting bridge and published dashboard outstanding |
 
 ### Recommended order of completion
 
-1. ~~Investigate and explain the four SoFP-to-SoCF closing-cash exceptions.~~ Done 21 November 2026:
-   bank overdrafts. Remaining: apply the overdraft bridge in `v_statement_reconciliation`.
+1. ~~Investigate and explain the four SoFP-to-SoCF closing-cash exceptions.~~ Explained as bank overdrafts. Remaining: apply the overdraft bridge in `v_statement_reconciliation`.
 2. Complete the bridge from TAC measures to NHS England's official before-impairments-and-transfers balances.
 3. Recalculate financial analysis and amend the detailed [2023/24 review](reports/nhs_sector_financial_review_2324.md) where required.
 4. Produce and test a genuine Power BI report with reconciled values, then add screenshots and publication details.

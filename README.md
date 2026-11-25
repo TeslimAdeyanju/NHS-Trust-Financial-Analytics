@@ -8,7 +8,7 @@ This project was motivated by a need to understand the growing financial pressur
 
 **What the published accounts show:** NHS England reported a £562 million surplus in 2021/22, a £457 million deficit in 2022/23 and a £2.312 billion deficit in 2023/24, measured before impairments and transfers. The proportion of providers reporting a deficit increased from about 34% to 64%. These figures show a worsening financial position but do not, on their own, identify the cause.
 
-**How I investigated it:** I used NHS England's published Trust Accounts Consolidation data for three financial years, processed and standardised the source records with Python, and developed MySQL analytical views and financial measures for cross-year and trust-level comparison. The completed fresh run loaded 2,210,974 facts for 215 trusts, produced 633 trust-year analytical rows and regenerated thirteen reporting exports. The project also includes a Power BI reporting model; the dashboard itself is pending publication.
+**How I investigated it:** I used NHS England's published Trust Accounts Consolidation data for three financial years, processed and standardised the source records with Python, and developed MySQL analytical views and financial measures for cross-year and trust-level comparison. The project also includes a Power BI reporting model; the dashboard itself is pending publication.
 
 [Explore the full project methodology and documentation](project_documentation.md).
 
@@ -68,15 +68,6 @@ Explore the six stages and their implementation notes:
 - **[Data Visualisation & Insights](notebook/06_data_visualisation_and_insights/README.md):** Develop Power BI reporting and financial insights; dashboard publication is pending.
 
 The implementation uses MySQL Bronze, Silver and Gold layers. Detailed schemas, data checks, source mappings and design decisions are documented in [Project Documentation](project_documentation.md).
-
-### Verified pipeline status — 29 October 2026
-
-- Six production TAC workbooks loaded from exact SHA-256-tracked source files.
-- 4,239,680 Bronze rows and 2,210,974 populated CY Silver facts.
-- 18 automated validation checks passed; the one non-critical closing-cash warning is explained by bank overdrafts.
-- All 633 trust-years contain SoCI, SoFP and SoCF records.
-- Thirteen canonical Power BI CSVs and nine separate enriched outputs generated.
-- Eight regression tests passing.
 
 ## Documentation and reproducibility
 

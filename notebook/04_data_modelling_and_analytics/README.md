@@ -43,10 +43,8 @@ in dependency order, ending with
 residuals. Cross-year comparisons and ratios require consistent denominators and confirmed sign
 conventions.
 
-The SQL views were executed against the freshly populated MySQL database for all 633 trust-years (first on
-29 October 2026; a from-scratch rebuild on 21 November 2026 gave identical results). SoCI,
-SoFP and SoCF residuals are within £1k; four SoFP-to-SoCF closing-cash exceptions exceed £1k, with a
-maximum of £269.9941k.
+Check the reconciliation view after every rebuild. SoFP-to-SoCF closing-cash exceptions above £1k are explained
+by bank overdrafts (see the reconciliation workpaper).
 
 **All four are bank overdrafts, not errors.** The SoFP reports cash gross, with overdrafts in borrowings;
 the SoCF reports cash net of overdrafts (IAS 7). The `TAC19 CCE` cash note bridges the two, and each
@@ -263,7 +261,7 @@ SubCode list — tag once in the dimension, every view benefits. `is_subtotal` f
 
 ## Analytics Layer — The Nine SQL Views
 
-`fct_tac` is correct once loaded, but it still contains 2,210,974 individual SubCode rows — not something a
+`fct_tac` is correct once loaded, but it still contains millions of individual SubCode rows — not something a
 dashboard can chart. Nine `nhs_gold` views pivot it into trust-level, year-level tables — each
 fully-qualifying its `nhs_silver` source tables, since Gold and Silver are separate databases.
 

@@ -2,7 +2,7 @@
 
 **Status:** Source/code audit and live three-statement validation completed; national accounting-basis reconciliation remains preliminary.
 
-**Prepared:** 28 October 2026; live-run evidence updated 29 October 2026; closing-cash exceptions explained and rebuild evidence added 21 November 2026
+**Prepared:** 28 October 2026; updated 21 November 2026
 
 **Scope:** NHS trusts and NHS foundation trusts. All monetary amounts below are £ million unless noted.
 
@@ -63,9 +63,7 @@ Primary official documents: [2022/23 accounts](https://www.gov.uk/government/pub
 7. Database scripts now require an environment-supplied password. Any password exposed by earlier history should still be rotated.
 8. `v_kpis.sql` now applies parentheses consistently around the EBITDA numerator. Its RAG thresholds remain illustrative project bands rather than NHS regulatory ratings.
 
-These observations originated from repository review. A subsequent fresh MySQL run loaded 2,210,974
-facts for 215 trusts and confirmed complete three-statement coverage across 633 trust-years. A
-from-scratch rebuild on 21 November 2026 reproduced the same facts and validation results.
+These observations originated from repository review. Re-run the pipeline and validation after any change to confirm they still hold.
 
 ### 4.1 Closing-cash exceptions: explained by bank overdrafts
 
