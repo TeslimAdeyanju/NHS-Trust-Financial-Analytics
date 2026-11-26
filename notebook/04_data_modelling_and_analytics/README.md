@@ -10,6 +10,49 @@
 
 ---
 
+## Where SQL and Python Meet in This Stage
+
+The schema script built Silver's tables and Gold's views before any data was loaded. The
+**[SQL Guide](../sql_database_guide/README.md)** explains that build step by step: the order the tables are
+created in and why, which dimensions SQL seeds itself, and how the views are deployed and run. This stage
+covers what fills them:
+
+| Layer | Built by SQL ([SQL Guide](../sql_database_guide/README.md)) | Filled by Python (this stage) | Holds data? |
+|-------|--------------|------------------|-------------|
+| `nhs_silver` | 4 dimension tables, 3 of them seeded with reference rows, plus the empty `fct_tac` | `dim_trust`, `fct_tac` and any missing `dim_worksheet` rows, once per workbook | Yes |
+| `nhs_gold` | 9 views (`CREATE VIEW`) | Nothing. Views are saved queries, calculated when they're read | No |
+
+## How Python Fills Silver, Once per Workbook
+
+When `process_file()` reaches step 7 of the [stage ③ flow](../03_data_cleaning_and_transformation/README.md#the-full-flow-for-one-workbook),
+the file's data is already in Bronze. Two functions move it into Silver. Each opens **two** engines,
+`get_engine(STG_DB)` to read Bronze and `get_engine(SILVER_DB)` to write Silver, and the data passes
+through Python (as a pandas DataFrame) on its way between the two databases:
+
+| # | Function | Reads (SQL on Bronze) | Writes (SQL on Silver) | Why |
+|---|----------|-----------------------|------------------------|-----|
+| 1 | `populate_dim_trust()` | `SELECT DISTINCT org_code, organisation_name, sector, region, trust_type FROM stg_provider_list` for this file only | `INSERT INTO dim_trust ... ON DUPLICATE KEY UPDATE` | `fct_tac.org_code` has a foreign key to `dim_trust`, so every trust must exist before its facts |
+| 2 | `promote_to_fact()` | `SELECT DISTINCT worksheet_name FROM stg_tac_raw` for this file | `INSERT IGNORE INTO dim_worksheet` | `fct_tac.worksheet_name` has a foreign key to `dim_worksheet`, so every schedule must exist first |
+| 3 | `promote_to_fact()` | `stg_tac_raw JOIN stg_provider_list` on the name key, current year and non-blank amounts only | — | Attaches the ODS code to every figure |
+| 4 | `promote_to_fact()` | — | One transaction: `DELETE FROM fct_tac` for this file's year and type, then `INSERT ... ON DUPLICATE KEY UPDATE` in chunks of 1,000 | Replaces this file's slice of the fact table, and only that slice |
+
+Three SQL patterns do most of the work here:
+
+- **`INSERT ... ON DUPLICATE KEY UPDATE`** (an "upsert") inserts a row, or updates it if a row with the
+  same primary or unique key already exists. `dim_trust` uses it because the same trust appears in several
+  workbooks and should end up as one row.
+- **`INSERT IGNORE`** inserts a row, or does nothing if it already exists. `dim_worksheet` uses it because
+  a seeded schedule must keep its proper title.
+- **Scoped `DELETE` then `INSERT` inside one transaction** replaces exactly one workbook's facts. If the
+  insert fails part-way, the delete is rolled back too, and the previous facts stay in place.
+
+![Bronze to Silver, once per workbook: populate_dim_trust() reads this file's rows from stg_provider_list and upserts dim_trust with INSERT ... ON DUPLICATE KEY UPDATE. promote_to_fact() reads distinct worksheet names from stg_tac_raw and runs INSERT IGNORE into dim_worksheet, then joins stg_tac_raw to stg_provider_list for current-year, non-blank rows and, in one transaction, deletes this file's slice of fct_tac and inserts the new rows in chunks. dim_trust and dim_worksheet are written before fct_tac because fct_tac has foreign keys to both.](../../docs/images/stage4_promote_to_silver_flow.png)
+
+The sections further down show the exact SQL for [`populate_dim_trust()`](#populate_dim_trust--slowly-changing-dimension-type-1)
+and [`promote_to_fact()`](#promote_to_fact--the-critical-join).
+
+---
+
 ## Three-statement financial model
 
 The analytical model now explicitly distinguishes the three NHS financial statements instead of treating income and expenditure as a complete sustainability assessment.
@@ -264,6 +307,8 @@ SubCode list — tag once in the dimension, every view benefits. `is_subtotal` f
 `fct_tac` is correct once loaded, but it still contains millions of individual SubCode rows — not something a
 dashboard can chart. Nine `nhs_gold` views pivot it into trust-level, year-level tables — each
 fully-qualifying its `nhs_silver` source tables, since Gold and Silver are separate databases.
+How the views are deployed, their order, and what MySQL does when one is read are covered in the
+[SQL Guide, Gold](../sql_database_guide/README.md#gold-the-views).
 
 **`v_income_expenditure`** — pivots TAC02 SoCI SubCodes into an I&E summary row per trust per year:
 
@@ -343,6 +388,7 @@ narrower views (including `v_profit_and_loss`/`v_balance_sheet`) separately inst
 | File | What to Read |
 |------|-------------|
 | [python/ingestion/load_tac_data.py](../../python/ingestion/load_tac_data.py) | `populate_dim_trust()`, `promote_to_fact()` |
+| [SQL Guide](../sql_database_guide/README.md) | How the schema script builds Silver and Gold, the view deploy order, how a view runs |
 | [sql/schema/create_tables_mysql.sql](../../sql/schema/create_tables_mysql.sql) | Full dimension + fact DDL |
 | [sql/views/](../../sql/views/) | Standalone, canonical version of every `v_*` view |
 | [sql/CLAUDE.md](../../sql/CLAUDE.md) | Naming conventions, view standards, query style |

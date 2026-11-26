@@ -164,9 +164,6 @@ All database scripts read `DB_PASSWORD` from the environment (no default — the
 it's unset; `export DB_PASSWORD='...'` first); `DB_USER`, `DB_HOST`, and `DB_PORT` also support
 environment overrides and default to `root`, `127.0.0.1`, and `3306`.
 
-`sql/schema/create_tables.sql` is the older PostgreSQL version of the schema (`CREATE SCHEMA`,
-`BIGSERIAL`). Don't run or edit it as if it were current; `create_tables_mysql.sql` is the live one.
-
 `data/raw/` (source Excel, ~170MB) and `data/processed/` (generated) are git-ignored — regenerate rather
 than expecting them to be present after a fresh clone.
 

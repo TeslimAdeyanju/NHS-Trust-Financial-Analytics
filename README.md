@@ -67,6 +67,8 @@ Explore the six stages and their implementation notes:
 - **[Data Preparation for Reporting](notebook/05_data_preparation_for_reporting/README.md):** Create curated datasets and reporting exports.
 - **[Data Visualisation & Insights](notebook/06_data_visualisation_and_insights/README.md):** Develop Power BI reporting and financial insights; dashboard publication is pending.
 
+Alongside the stages, the **[SQL Guide](notebook/sql_database_guide/README.md)** explains how the MySQL schema script builds the Bronze, Silver and Gold databases, and how the Gold views work.
+
 The implementation uses MySQL Bronze, Silver and Gold layers. Detailed schemas, data checks, source mappings and design decisions are documented in [Project Documentation](project_documentation.md).
 
 ## Documentation and reproducibility

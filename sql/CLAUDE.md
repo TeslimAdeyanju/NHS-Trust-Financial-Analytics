@@ -11,10 +11,8 @@ finance-schema template.
   `nhs_gold` (analytical views). Views in `nhs_gold` reference `nhs_silver.*` tables via fully-qualified
   cross-database names (`FROM nhs_silver.fct_tac`) since MySQL views can freely query another database on
   the same server — no linked-server setup needed.
-- `sql/schema/create_tables.sql` is a PostgreSQL equivalent kept as a reference/portability exercise (three
-  schemas in one database rather than three MySQL databases) — it is not what's deployed or queried by
-  anything in `python/` or `power_bi/`, and does not duplicate the full ~1,000-row `dim_subcode` seed or
-  the `v_profit_and_loss`/`v_balance_sheet` views that only the MySQL file carries.
+- `sql/schema/create_tables_mysql.sql` is the only schema file: it builds all three databases (staging
+  tables, dimensions, fact table) and then sources `sql/schema/deploy_gold_views.sql` for the views.
 
 ## Schema Layout
 

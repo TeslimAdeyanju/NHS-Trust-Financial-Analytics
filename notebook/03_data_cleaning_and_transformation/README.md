@@ -92,6 +92,92 @@ fingerprint and row counts, so there is an audit trail for every load, successfu
 
 ---
 
+## How Python and SQL Work Together
+
+The pipeline has two halves. **SQL builds the structure**: before anything is loaded,
+[`create_tables_mysql.sql`](../../sql/schema/create_tables_mysql.sql) creates the three databases and every
+table in them, empty. **Python fills it**: this stage's code reads each workbook and writes rows into those
+tables. Python never creates a table, so the schema must be built first. How the SQL side works (the build
+command, every table definition and the Gold views) is explained in the
+**[SQL Guide](../sql_database_guide/README.md)**.
+
+### The tables this stage writes to
+
+This stage writes only to `nhs_bronze`, into the three tables the schema script created there:
+
+| Table | One row per | Written by | Purpose |
+|-------|-------------|------------|---------|
+| `import_batch` | Source file (by name and fingerprint) | `record_import_batch()` | The audit log: which file was loaded, when, its row counts and gate results, and whether it succeeded |
+| `stg_provider_list` | Trust in a workbook's "List of Providers" sheet | `load_staging()` | The lookup that turns a trust name into its ODS code |
+| `stg_tac_raw` | Line in a workbook's "All data" sheet | `load_staging()` | The near-verbatim copy of every published figure, current and prior year |
+
+The full `CREATE TABLE` for each is in the [SQL Guide, Bronze](../sql_database_guide/README.md#bronze-the-landing-tables).
+Two things connect the Python code to those definitions:
+
+- **The Python column names are the SQL column names.** `read_all_data()` renames the Excel headers to
+  exactly the names in the `CREATE TABLE` (`organisation_name`, `row_num`, `total` ...). That is what lets
+  `DataFrame.to_sql()` write a DataFrame straight into the table with no column mapping.
+- **`financial_year` and `trust_type` are on every row.** Python adds them from the file name. Together
+  they identify which of the six workbooks a row came from, so every `DELETE` the loader runs is filtered
+  on them and a reload only ever touches its own file's rows.
+
+### How Python connects to MySQL
+
+Python talks to MySQL through **SQLAlchemy** (a Python database toolkit), using the **PyMySQL** driver.
+`get_engine()` builds the connection from environment variables, so no password is written in the code:
+
+```python
+DB_USER     = os.getenv("DB_USER", "root")
+DB_PASSWORD = os.getenv("DB_PASSWORD")          # required; the script stops if it's not set
+DB_HOST     = os.getenv("DB_HOST", "127.0.0.1")
+DB_PORT     = int(os.getenv("DB_PORT", "3306"))
+
+STG_DB    = "nhs_bronze"
+SILVER_DB = "nhs_silver"
+
+def get_engine(database: str):
+    url = URL.create(
+        drivername="mysql+pymysql",
+        username=DB_USER, password=DB_PASSWORD,
+        host=DB_HOST, port=DB_PORT,
+        database=database,                       # which of the three databases to use
+        query={"charset": "utf8mb4"},
+    )
+    return create_engine(url)
+```
+
+An engine connects to one database at a time. Each function asks for the one it writes to:
+`get_engine(STG_DB)` for Bronze in this stage, and `get_engine(SILVER_DB)` for Silver in the next stage. Each
+write runs inside `with engine.begin() as conn:`, which opens a **transaction**. If every statement in the
+block succeeds, it is committed. If any one fails, all of them are rolled back, so the database is never
+left half-updated.
+
+### The full flow for one workbook
+
+`main()` finds every `TAC_NHS_*.xlsx` file in `data/raw/`, sorts them by name, and passes each one to
+`process_file()`. For each file, this is what Python does and what it sends to MySQL:
+
+| # | Python function | Runs in | SQL sent to MySQL | Table affected | Result |
+|---|-----------------|---------|-------------------|----------------|--------|
+| 1 | `process_file()` works out the year, type and SHA-256 from the file | Python only | — | — | e.g. `2021/22`, `FOUNDATION_TRUST`, `e70b6db7…` |
+| 2 | `record_import_batch("STARTED")` | `nhs_bronze` | `INSERT ... ON DUPLICATE KEY UPDATE` | `import_batch` | The file is logged before it is read |
+| 3 | `read_provider_list()` and `read_all_data()` | Python only (pandas) | — | — | Two cleaned DataFrames held in memory |
+| 4 | `source_validation_counts()` and `validate()` | Python only | — | — | Pass, or an error that jumps to step 9 |
+| 5 | `record_import_batch("VALIDATED")` | `nhs_bronze` | `INSERT ... ON DUPLICATE KEY UPDATE` | `import_batch` | Status and the gate's counts saved |
+| 6 | `load_staging()` | `nhs_bronze` | `DELETE ... WHERE financial_year = ? AND trust_type = ?`, then `INSERT` in batches | `stg_provider_list`, `stg_tac_raw` | This file's slice of Bronze replaced |
+| 7 | `populate_dim_trust()` and `promote_to_fact()` | `nhs_bronze` → `nhs_silver` | The next stage: [stage ④](../04_data_modelling_and_analytics/README.md#how-python-fills-silver-once-per-workbook) | `dim_worksheet`, `dim_trust`, `fct_tac` | This file's slice of Silver replaced |
+| 8 | `record_import_batch("LOADED")` | `nhs_bronze` | `INSERT ... ON DUPLICATE KEY UPDATE` | `import_batch` | `completed_ts` set; the file is done |
+| 9 | *On any error:* `record_import_batch("FAILED", error)` | `nhs_bronze` | `INSERT ... ON DUPLICATE KEY UPDATE` | `import_batch` | Reason saved, then the run stops |
+
+Steps 3 and 4 never touch the database. A file that fails the gate leaves Bronze and Silver exactly as they
+were, and the only trace is its `FAILED` row in `import_batch`.
+
+![One workbook, Python to MySQL: load_tac_data.py logs import_batch STARTED in nhs_bronze, reads the "List of Providers" and "All data" sheets from the Excel workbook, standardises them, tags CY/PY, builds the name key and runs the validate() quality gate. If a check fails, import_batch records FAILED with the reason and no staging or Silver rows are written. If all checks pass, import_batch records VALIDATED with counts, the file's slice of stg_provider_list and stg_tac_raw is deleted and reinserted, populate_dim_trust() and promote_to_fact() write dim_trust, dim_worksheet and fct_tac in nhs_silver, and import_batch records LOADED.](../../docs/images/stage3_workbook_load_flow.png)
+
+The sections below go through steps 2 to 6 in detail.
+
+---
+
 ## How It Works in the Code
 
 Every function below is in [`python/ingestion/load_tac_data.py`](../../python/ingestion/load_tac_data.py)
@@ -328,41 +414,8 @@ figure as shown in this workbook. Each now records which year it belongs to, how
 code (`RCF`, from the provider list), and exactly which file it came from. In stage ④ only the `CY` row
 moves on to Silver.
 
-The full Bronze table definition:
-
-```sql
-CREATE TABLE stg_tac_raw (
-    id                 BIGINT        AUTO_INCREMENT PRIMARY KEY,
-
-    -- The source row, as published
-    organisation_name  VARCHAR(300)  NOT NULL,   -- ODS code is attached in stage ④
-    worksheet_name     VARCHAR(50)   NOT NULL,
-    table_id           SMALLINT      NOT NULL,
-    main_code          VARCHAR(20)   NOT NULL,
-    row_num            SMALLINT      NOT NULL,
-    sub_code           VARCHAR(20)   NOT NULL,
-    total              DECIMAL(18,5),            -- £000s; NULL means a blank amount
-
-    -- Added by this stage
-    provider_name_key  VARCHAR(300)  NOT NULL,   -- normalised name, used for matching
-    source_file        VARCHAR(200)  NOT NULL,
-    source_sha256      CHAR(64)      NOT NULL,
-    trust_type         VARCHAR(20)   NOT NULL,
-    financial_year     CHAR(7)       NOT NULL,
-    year_type          CHAR(2)       NOT NULL,   -- CY or PY
-    load_ts            TIMESTAMP     DEFAULT CURRENT_TIMESTAMP,
-
-    -- Indexes for the joins and filters used in stage ④
-    INDEX idx_stg_org_year      (organisation_name(100), financial_year),
-    INDEX idx_stg_provider_key  (provider_name_key(100), financial_year, trust_type),
-    INDEX idx_stg_sub_code      (sub_code),
-    INDEX idx_stg_year_type     (financial_year, year_type)
-) ENGINE=InnoDB;
-```
-
-It has no unique key on purpose: Bronze is a record of what was published, and duplicates are stopped by
-the gate before they can be written. `stg_provider_list` holds the provider list in the same way, one slice
-per file, with the same name key so the two can be joined in stage ④.
+The full `stg_tac_raw` table definition, and why it has no unique key, is in the
+[SQL Guide](../sql_database_guide/README.md#bronze-the-landing-tables).
 
 ---
 
@@ -386,7 +439,7 @@ per file, with the same name key so the two can be joined in stage ④.
 |------|-------------|
 | [python/ingestion/load_tac_data.py](../../python/ingestion/load_tac_data.py) | `process_file()`, `record_import_batch()`, `read_provider_list()`, `read_all_data()`, `validate()`, `load_staging()` |
 | [python/ingestion/source_integrity.py](../../python/ingestion/source_integrity.py) | `provider_name_key()`, the alias list, the gate's counts |
-| [sql/schema/create_tables_mysql.sql](../../sql/schema/create_tables_mysql.sql) | `stg_tac_raw`, `stg_provider_list` and `import_batch` DDL |
+| [SQL Guide](../sql_database_guide/README.md) | How the schema is built; the `stg_tac_raw`, `stg_provider_list` and `import_batch` definitions |
 | [python/CLAUDE.md](../../python/CLAUDE.md) | Pandas patterns, environment-based connection configuration, validation pattern |
 | [project_documentation.md](../../project_documentation.md), stage ③ | The narrative version, plus the client/server MySQL diagram |
 
