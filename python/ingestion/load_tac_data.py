@@ -7,9 +7,9 @@ into MySQL databases nhs_bronze (staging) and nhs_silver (conformed dims/fact ta
 Usage:
     python python/ingestion/load_tac_data.py
 
-Expects files in data/raw/ matching:
-    TAC_NHS_trusts_YYYY-YY.xlsx
-    TAC_NHS_foundation_trusts_YYYY-YY.xlsx
+Expects files in data/raw/ named like (case-insensitive; the year may use - or _):
+    tac_nhs_trusts_YYYY_YY.xlsx              or  TAC_NHS_trusts_YYYY-YY.xlsx
+    tac_nhs_foundation_trusts_YYYY_YY.xlsx   or  TAC_NHS_foundation_trusts_YYYY-YY.xlsx
 """
 
 import logging
@@ -46,7 +46,7 @@ RAW_DIR       = Path("data/raw")
 PROCESSED_DIR = Path("data/processed")
 
 # Financial year regex --
-YEAR_RE = re.compile(r"(\d{4})-(\d{2})")
+YEAR_RE = re.compile(r"(\d{4})[-_](\d{2})")   # 2023-24 or 2023_24
 
 # Raw TAC Excel columns from All Sheets 
 RAW_COLUMNS = [
@@ -74,6 +74,17 @@ def filename_to_financial_year(filename: str) -> str:
     if not match:
         raise ValueError(f"Cannot extract financial year from: {filename}")
     return f"{match.group(1)}/{match.group(2)}"
+
+# Find the TAC data workbooks in a folder, whatever their capitalisation
+def find_tac_files(raw_dir: Path) -> list[Path]:
+    return sorted(
+        (
+            p for p in raw_dir.glob("*.xlsx")
+            if p.name.lower().startswith("tac_nhs_")
+            and "illustrative" not in p.name.lower()
+        ),
+        key=lambda p: p.name.lower(),
+    )
 
 # Determine trust type from filename
 def filename_to_trust_type(filename: str) -> str:
@@ -123,7 +134,6 @@ def read_provider_list(
     log.info("  Found %d providers", len(df))
     return df
 
-
 def find_sheet_name(path: Path, target: str) -> str:
     """Return the actual sheet name matching target case-insensitively."""
     import openpyxl
@@ -135,7 +145,6 @@ def find_sheet_name(path: Path, target: str) -> str:
         raise ValueError(f"Sheet '{target}' not found in {path.name}. Available: {wb.sheetnames}")
     finally:
         wb.close()
-
 
 def read_all_data(
     path: Path, source_file: str, source_sha256: str,
@@ -362,7 +371,6 @@ def load_staging(data_df: pd.DataFrame, provider_df: pd.DataFrame,
     log.info("  Loaded %d rows → nhs_bronze.stg_provider_list", len(provider_df))
     log.info("  Loaded %d rows → nhs_bronze.stg_tac_raw", len(data_df))
 
-
 def populate_dim_trust(financial_year: str, trust_type: str) -> None:
     stg_engine    = get_engine(STG_DB)
     silver_engine = get_engine(SILVER_DB)
@@ -420,7 +428,6 @@ def populate_dim_trust(financial_year: str, trust_type: str) -> None:
         conn.execute(upsert_sql, providers.to_dict(orient="records"))
 
     log.info("  Upserted %d rows → nhs_silver.dim_trust", len(providers))
-
 
 def promote_to_fact(financial_year: str, trust_type: str) -> None:
     """Resolve ODS codes and atomically replace one year/trust-type fact scope."""
@@ -552,14 +559,10 @@ def process_file(path: Path) -> None:
 
     log.info("  DONE: %s\n", source_file)
 
-
 def main():
     PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
 
-    files = sorted(
-        p for p in RAW_DIR.glob("TAC_NHS_*.xlsx")
-        if "illustrative" not in p.name.lower()
-    )
+    files = find_tac_files(RAW_DIR)
 
     if not files:
         log.error("No TAC data files found in %s", RAW_DIR)

@@ -99,3 +99,51 @@ class SourceValidationTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+# load_tac_data imports source_integrity as a top-level module, so its folder must be on sys.path.
+import sys
+import tempfile
+
+sys.path.insert(0, str(MODULE_PATH.parent))
+LOADER_SPEC = importlib.util.spec_from_file_location(
+    "load_tac_data", MODULE_PATH.parent / "load_tac_data.py"
+)
+load_tac_data = importlib.util.module_from_spec(LOADER_SPEC)
+assert LOADER_SPEC.loader is not None
+LOADER_SPEC.loader.exec_module(load_tac_data)
+
+
+class SourceFileNameTests(unittest.TestCase):
+    def test_both_naming_styles_are_found_and_illustrative_is_skipped(self):
+        names = [
+            "tac_nhs_trusts_2021_22.xlsx",
+            "TAC_NHS_foundation_trusts_2022-23.xlsx",
+            "tac_illustrative_2023_24.xlsx",
+            "notes.xlsx",
+        ]
+        with tempfile.TemporaryDirectory() as tmp:
+            for name in names:
+                (Path(tmp) / name).touch()
+            found = [p.name for p in load_tac_data.find_tac_files(Path(tmp))]
+        self.assertEqual(
+            found,
+            ["TAC_NHS_foundation_trusts_2022-23.xlsx", "tac_nhs_trusts_2021_22.xlsx"],
+        )
+
+    def test_year_reads_with_underscore_or_hyphen(self):
+        self.assertEqual(
+            load_tac_data.filename_to_financial_year("tac_nhs_trusts_2021_22.xlsx"), "2021/22"
+        )
+        self.assertEqual(
+            load_tac_data.filename_to_financial_year("TAC_NHS_trusts_2023-24.xlsx"), "2023/24"
+        )
+
+    def test_trust_type_from_either_style(self):
+        self.assertEqual(
+            load_tac_data.filename_to_trust_type("tac_nhs_foundation_trusts_2021_22.xlsx"),
+            "FOUNDATION_TRUST",
+        )
+        self.assertEqual(
+            load_tac_data.filename_to_trust_type("TAC_NHS_trusts_2023-24.xlsx"), "NHS_TRUST"
+        )
