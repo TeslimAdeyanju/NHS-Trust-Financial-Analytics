@@ -284,7 +284,7 @@ The table above lists every step. This section shows the code behind steps 4 to 
 from disk into Bronze. Steps 11 and 12 move it on into Silver and are covered in
 [stage ④](../04_data_modelling_and_analytics/README.md#42-how-python-fills-silver-once-per-workbook).
 
-### 3.7.1 Step 4 — Log the file before reading it
+### 3.7.1 Log the file before reading it
 
 `record_import_batch("STARTED")` writes the file name, size, financial year, trust type and a SHA-256
 fingerprint of the file's exact bytes to `nhs_bronze.import_batch`. The same row is updated as the file
@@ -292,7 +292,7 @@ moves through the steps (`VALIDATED` at step 9, `LOADED` at step 13), or marked 
 message. The fingerprint from step 3 is also stamped on every row the file produces, so any figure can be
 tied to the exact version of the workbook it came from.
 
-### 3.7.2 Steps 5–6 — Read and standardise both sheets
+### 3.7.2 Read and standardise both sheets
 
 Each workbook is read entirely in memory. Apart from the audit log entry, nothing is written to the
 database until step 10.
@@ -429,7 +429,7 @@ def normalise_provider_name(value: str) -> str:
 | `King’s College Hospital NHS Foundation Trust` | `king s college hospital nhs foundation trust` |
 | `South Warwickshire University NHS Foundation Trust` | `south warwickshire nhs foundation trust` (via the alias list) |
 
-### 3.7.3 Steps 7–9 — The quality gate
+### 3.7.3 The quality gate
 
 The gate is two functions. `source_validation_counts()` (step 7) counts each kind of problem, and
 `validate()` (step 8) stops the load if any count is above zero. They are separate so the same counts can
@@ -448,7 +448,7 @@ Every check is critical. If any fails, the whole file is rejected, nothing is wr
 records `FAILED` with the reason. If all pass, `import_batch` records `VALIDATED` along with the row counts
 the gate calculated.
 
-### 3.7.4 Step 10 — Write to Bronze: `load_staging()`
+### 3.7.4 Write to Bronze: `load_staging()`
 
 The validated data replaces this file's slice of Bronze, inside one transaction:
 
