@@ -66,7 +66,9 @@ year_label_short      CHAR(5)                    -- '23/24'
 
 There is no monthly grain (`period_key`, `period_label`, M01–M12) anywhere in this project — TAC is an
 **annual** return. Five years are seeded (2019/20–2023/24) even though only three (2021/22–2023/24) are
-actually loaded with data, to leave room for older or newer years without a schema change.
+actually loaded with data, which leaves room for two older years. Newer years are **not** seeded: before
+loading a 2024/25 or later workbook, add its row here (and to the seed in `create_tables_mysql.sql`), or
+`promote_to_fact()` fails on the `fct_tac → dim_financial_year` foreign key.
 
 ### `dim_worksheet` and `dim_subcode`
 
