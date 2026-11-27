@@ -158,47 +158,46 @@ left half-updated.
 ### The full flow for one workbook
 
 `main()` finds every `TAC_NHS_*.xlsx` file in `data/raw/` (skipping the illustrative workbook), sorts them
-by name, and passes each one to `process_file()`. For each file, these functions run in this order.
-Functions marked **[SI]** are in [`source_integrity.py`](../../python/ingestion/source_integrity.py); the
-rest are in [`load_tac_data.py`](../../python/ingestion/load_tac_data.py).
+by name, and passes each one to `process_file()`. For each file, these functions run in this order. The
+**Source** column shows which Python file each function lives in.
 
 **A. Work out what the file is** (Python only)
 
-| # | Function | What it does | Writes to MySQL |
-|---|----------|--------------|-----------------|
-| 1 | `filename_to_financial_year()` | `…_2021-22.xlsx` → `2021/22` | — |
-| 2 | `filename_to_trust_type()` | `foundation` in the name → `FOUNDATION_TRUST`, otherwise `NHS_TRUST` | — |
-| 3 | `sha256_file()` **[SI]** | Fingerprints the file's bytes, e.g. `e70b6db7…` | — |
+| # | Function | Source | What it does | Writes to MySQL |
+|---|----------|--------|--------------|-----------------|
+| 1 | `filename_to_financial_year()` | [`load_tac_data.py`](../../python/ingestion/load_tac_data.py) | `…_2021-22.xlsx` → `2021/22` | — |
+| 2 | `filename_to_trust_type()` | [`load_tac_data.py`](../../python/ingestion/load_tac_data.py) | `foundation` in the name → `FOUNDATION_TRUST`, otherwise `NHS_TRUST` | — |
+| 3 | `sha256_file()` | [`source_integrity.py`](../../python/ingestion/source_integrity.py) | Fingerprints the file's bytes, e.g. `e70b6db7…` | — |
 
 **B. Log the file**
 
-| # | Function | What it does | Writes to MySQL |
-|---|----------|--------------|-----------------|
-| 4 | `record_import_batch("STARTED")` | Logs the file before it is read | `nhs_bronze.import_batch` (upsert) |
+| # | Function | Source | What it does | Writes to MySQL |
+|---|----------|--------|--------------|-----------------|
+| 4 | `record_import_batch("STARTED")` | [`load_tac_data.py`](../../python/ingestion/load_tac_data.py) | Logs the file before it is read | `nhs_bronze.import_batch` (upsert) |
 
 **C. Clean and transform** (in memory, nothing written)
 
-| # | Function | What it does | Writes to MySQL |
-|---|----------|--------------|-----------------|
-| 5 | `read_provider_list()` | Renames and trims the provider list, adds the name key with `provider_name_key()` **[SI]**, keeps only 3-character ODS codes | — |
-| 6 | `read_all_data()` | Finds the sheet with `find_sheet_name()`, renames headers, drops unidentifiable rows, tags CY/PY with `infer_year_type()`, converts amounts to 5 dp, adds the name key and source columns | — |
+| # | Function | Source | What it does | Writes to MySQL |
+|---|----------|--------|--------------|-----------------|
+| 5 | `read_provider_list()` | [`load_tac_data.py`](../../python/ingestion/load_tac_data.py) | Renames and trims the provider list, adds the name key with `provider_name_key()` (from `source_integrity.py`), keeps only 3-character ODS codes | — |
+| 6 | `read_all_data()` | [`load_tac_data.py`](../../python/ingestion/load_tac_data.py) | Finds the sheet with `find_sheet_name()`, renames headers, drops unidentifiable rows, tags CY/PY with `infer_year_type()`, converts amounts to 5 dp, adds the name key with `provider_name_key()` (from `source_integrity.py`) and the source columns | — |
 
 **D. Quality gate** (in memory)
 
-| # | Function | What it does | Writes to MySQL |
-|---|----------|--------------|-----------------|
-| 7 | `source_validation_counts()` **[SI]** | Counts duplicates, fact-key collisions, ambiguous and unmatched names | — |
-| 8 | `validate()` | Pass, or raise an error (see ✕ below) | — |
-| 9 | `record_import_batch("VALIDATED")` | Saves the status and the gate's counts | `nhs_bronze.import_batch` (upsert) |
+| # | Function | Source | What it does | Writes to MySQL |
+|---|----------|--------|--------------|-----------------|
+| 7 | `source_validation_counts()` | [`source_integrity.py`](../../python/ingestion/source_integrity.py) | Counts duplicates, fact-key collisions, ambiguous and unmatched names | — |
+| 8 | `validate()` | [`load_tac_data.py`](../../python/ingestion/load_tac_data.py) | Pass, or raise an error (see ✕ below) | — |
+| 9 | `record_import_batch("VALIDATED")` | [`load_tac_data.py`](../../python/ingestion/load_tac_data.py) | Saves the status and the gate's counts | `nhs_bronze.import_batch` (upsert) |
 
 **E. Write**
 
-| # | Function | What it does | Writes to MySQL |
-|---|----------|--------------|-----------------|
-| 10 | `load_staging()` | Deletes this file's year/type slice, then inserts in batches | `nhs_bronze.stg_provider_list`, `nhs_bronze.stg_tac_raw` |
-| 11 | `populate_dim_trust()` | Adds new trusts, updates existing ones ([stage ④](../04_data_modelling_and_analytics/README.md#how-python-fills-silver-once-per-workbook)) | `nhs_silver.dim_trust` |
-| 12 | `promote_to_fact()` | Adds missing schedules, then replaces this file's facts in one transaction ([stage ④](../04_data_modelling_and_analytics/README.md#how-python-fills-silver-once-per-workbook)) | `nhs_silver.dim_worksheet`, `nhs_silver.fct_tac` |
-| 13 | `record_import_batch("LOADED")` | Sets `completed_ts`; the file is done | `nhs_bronze.import_batch` (upsert) |
+| # | Function | Source | What it does | Writes to MySQL |
+|---|----------|--------|--------------|-----------------|
+| 10 | `load_staging()` | [`load_tac_data.py`](../../python/ingestion/load_tac_data.py) | Deletes this file's year/type slice, then inserts in batches | `nhs_bronze.stg_provider_list`, `nhs_bronze.stg_tac_raw` |
+| 11 | `populate_dim_trust()` | [`load_tac_data.py`](../../python/ingestion/load_tac_data.py) | Adds new trusts, updates existing ones ([stage ④](../04_data_modelling_and_analytics/README.md#how-python-fills-silver-once-per-workbook)) | `nhs_silver.dim_trust` |
+| 12 | `promote_to_fact()` | [`load_tac_data.py`](../../python/ingestion/load_tac_data.py) | Adds missing schedules, then replaces this file's facts in one transaction ([stage ④](../04_data_modelling_and_analytics/README.md#how-python-fills-silver-once-per-workbook)) | `nhs_silver.dim_worksheet`, `nhs_silver.fct_tac` |
+| 13 | `record_import_batch("LOADED")` | [`load_tac_data.py`](../../python/ingestion/load_tac_data.py) | Sets `completed_ts`; the file is done | `nhs_bronze.import_batch` (upsert) |
 
 **✕ On any error in steps 5–12:** `record_import_batch("FAILED", error)` saves the reason to
 `nhs_bronze.import_batch`, the error is re-raised, and `main()` stops the whole run.
