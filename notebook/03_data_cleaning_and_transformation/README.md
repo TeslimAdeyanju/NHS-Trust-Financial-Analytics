@@ -94,12 +94,15 @@ fingerprint and row counts, so there is an audit trail for every load, successfu
 
 ## How Python and SQL Work Together
 
-The pipeline has two halves. **SQL builds the structure**: before anything is loaded,
-[`create_tables_mysql.sql`](../../sql/schema/create_tables_mysql.sql) creates the three databases and every
-table in them, empty. **Python fills it**: this stage's code reads each workbook and writes rows into those
-tables. Python never creates a table, so the schema must be built first. How the SQL side works (the build
-command, every table definition and the Gold views) is explained in the
-**[SQL Guide](../sql_database_guide/README.md)**.
+The pipeline has two separate halves:
+
+- **SQL builds the structure.** Before anything is loaded,
+  [`create_tables_mysql.sql`](../../sql/schema/create_tables_mysql.sql) creates the three databases and
+  every table in them, empty.
+- **Python fills it.** This stage's code reads each workbook and writes rows into those tables.
+- **Python never creates a table**, so the schema must be built first.
+- **How the SQL side works** (the build command, every table definition and the Gold views) is explained in
+  the **[SQL Guide](../sql_database_guide/README.md)**.
 
 ### The tables this stage writes to
 
