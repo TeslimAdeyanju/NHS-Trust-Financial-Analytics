@@ -104,6 +104,19 @@ financial year, trust type, row counts, integrity results and final load status,
 workbooks are git-ignored, so after a re-download, compare the new file's SHA-256 with that audit rather than
 relying on the file name alone. A different fingerprint means NHS England changed the file.
 
+### Step 6 — the one script that reads a source file directly
+
+No pipeline code runs in this stage: it is the boundary between "data NHS England is responsible for" and
+"code I'm responsible for", which is why [stage ②](../02_data_ingestion/README.md) treats the downloaded
+files as fixed input to audit against, not something to clean in place.
+
+The one exception is a one-off helper. [`build_subcode_reference.py`](../../python/ingestion/build_subcode_reference.py) reads the illustrative workbook and generates labels for
+every SubCode the project doesn't label by hand, completing the roughly 1,000-row `dim_subcode` reference. It writes
+`data/processed/subcode_reference_seed.sql` and `subcode_reference.md` for review; the reviewed rows were
+merged by hand into the `dim_subcode` seed in
+[`create_tables_mysql.sql`](../../sql/schema/create_tables_mysql.sql) ([SQL Guide, step 3e](../sql_database_guide/README.md#silver-the-star-schema)).
+Rerun it only if NHS England revises the illustrative workbook.
+
 ### Conventions set here, used in every stage
 
 Two conventions established at the source apply to every table, column, and file downstream:
@@ -117,19 +130,6 @@ Two conventions established at the source apply to every table, column, and file
   There is one deliberate exception: `sector_benchmarks.csv` is pre-aggregated in £m (see
   [stage ⑤](../05_data_preparation_for_reporting/README.md)). £000 does not imply whole numbers: the
   source files contain values to five decimal places.
-
-### Step 6 — the one script that reads a source file directly
-
-No pipeline code runs in this stage: it is the boundary between "data NHS England is responsible for" and
-"code I'm responsible for", which is why [stage ②](../02_data_ingestion/README.md) treats the downloaded
-files as fixed input to audit against, not something to clean in place.
-
-The one exception is a one-off helper. [`build_subcode_reference.py`](../../python/ingestion/build_subcode_reference.py) reads the illustrative workbook and generates labels for
-every SubCode the project doesn't label by hand, completing the roughly 1,000-row `dim_subcode` reference. It writes
-`data/processed/subcode_reference_seed.sql` and `subcode_reference.md` for review; the reviewed rows were
-merged by hand into the `dim_subcode` seed in
-[`create_tables_mysql.sql`](../../sql/schema/create_tables_mysql.sql) ([SQL Guide, step 3e](../sql_database_guide/README.md#silver-the-star-schema)).
-Rerun it only if NHS England revises the illustrative workbook.
 
 ---
 
