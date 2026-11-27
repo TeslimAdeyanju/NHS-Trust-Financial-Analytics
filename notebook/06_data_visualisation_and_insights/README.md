@@ -2,108 +2,20 @@
 
 **Implementation:** Power BI semantic model, DAX and proposed report pages (publication pending).
 
-> This stage turns the thirteen CSVs from [stage ⑤](../05_data_preparation_for_reporting/README.md) into a
-> Power BI model, 51 DAX measures and five report pages. It's the only stage a non-technical user (a finance
-> director, a board) actually sees. No `.pbix` is checked in and the report isn't published yet, so the
-> pages below are a specification, not screenshots of a finished report.
+> Imports the thirteen CSVs from [stage ⑤](../05_data_preparation_for_reporting/README.md) (or connects directly to
+> [stage ④](../04_data_modelling_and_analytics/README.md) via DirectQuery), builds the model relationships and DAX
+> measures below, and is specified to render five report pages. This is the only stage a non-technical end
+> user — a finance director, a board — actually interacts with; there is no code to run here, only a model
+> to build inside Power BI Desktop, which is why this stage's "code" lives in `.md`/`.tmdl` files rather
+> than a script. No `.pbix` is checked in and the report is not yet published, so the pages below are a
+> specification, not screenshots of a finished report.
 
 ---
 
-## How Power BI Connects to the Data
+## Import and Rename
 
-There is no script in this stage. It's built by hand in Power BI Desktop:
-
-- **Power BI reads the CSVs.** It imports the files [`export_for_powerbi.py`](../../python/reporting/export_for_powerbi.py) writes to `data/processed/powerbi_export/`. It
-  never writes back to them or to MySQL.
-- **The model is built by hand.** Tables, relationships, measures and pages are created in Power BI
-  Desktop, following [`setup_guide.md`](../../power_bi/setup_guide.md).
-- **What's in the repo is the definition, not the file.** The measures are saved as [`_Measures.tmdl`](../../power_bi/dax/_Measures.tmdl) (exported from
-  Power BI) and [`dax_measures.md`](../../power_bi/dax_measures.md) (readable copy). The setup guide holds the
-  import steps, relationships and page specs.
-- **Run it after stage 5.** Refreshing the report re-reads the CSVs, so it shows whatever the last export
-  wrote.
-
-### The full build, step by step
-
-These are the steps in Power BI Desktop, in order. The **Source** column shows the repo file that defines
-each one.
-
-**A. Import**
-
-| # | Action in Power BI Desktop | Source | What it does |
-|---|----------------------------|--------|--------------|
-| 1 | **Get Data → Text/CSV** | [`setup_guide.md`](../../power_bi/setup_guide.md) §1 | Loads each of the thirteen CSVs |
-| 2 | Rename in the **Fields** pane | [`setup_guide.md`](../../power_bi/setup_guide.md) §1 | `ie_summary` → `fact_ie_summary`, and so on |
-| 3 | **Transform Data** | [`setup_guide.md`](../../power_bi/setup_guide.md) §1 | Sets column types: codes and years as Text, `_000s` and `_pct` as Decimal Number |
-
-**B. Model**
-
-| # | Action in Power BI Desktop | Source | What it does |
-|---|----------------------------|--------|--------------|
-| 4 | **Model view → relationships** | [`setup_guide.md`](../../power_bi/setup_guide.md) §2 | Joins every fact table to `dim_trust` and `dim_financial_year`, many-to-one |
-| 5 | **Enter Data → blank table** | [`setup_guide.md`](../../power_bi/setup_guide.md) §3 | Creates `_Measures`, an empty table that only holds measures |
-
-**C. Measures**
-
-| # | Action in Power BI Desktop | Source | What it does |
-|---|----------------------------|--------|--------------|
-| 6 | Add measures to `_Measures` | [`_Measures.tmdl`](../../power_bi/dax/_Measures.tmdl) | Adds the 51 DAX measures, in seven families |
-
-**D. Report**
-
-| # | Action in Power BI Desktop | Source | What it does |
-|---|----------------------------|--------|--------------|
-| 7 | Build the report pages | [`setup_guide.md`](../../power_bi/setup_guide.md) §4 | Five pages, visual by visual |
-| 8 | Add slicers | [`setup_guide.md`](../../power_bi/setup_guide.md) §6 | Year, sector, trust type and region on every page |
-| 9 | Apply RAG conditional formatting | [`setup_guide.md`](../../power_bi/setup_guide.md) §5 | Colours from the `... RAG Colour` measures |
-
-```mermaid
-%%{init: {"flowchart": {"nodeSpacing": 20, "rankSpacing": 50, "curve": "basis"}, "themeVariables": {"fontSize": "14px"}}}%%
-flowchart LR
-    subgraph CSV["data/processed/powerbi_export/"]
-        direction TB
-        CD["dim_trust.csv<br/>dim_financial_year.csv"]
-        CF["11 fact CSVs"]
-    end
-
-    subgraph MODEL["Power BI model"]
-        direction TB
-        DIM[("dim_trust<br/>dim_financial_year")]
-        FACT[("11 fact_ tables")]
-        MEAS["_Measures<br/>51 DAX measures"]
-        FACT -- "4 · many-to-one" --> DIM
-    end
-
-    subgraph REPORT["Report"]
-        direction TB
-        PG["7 · five pages"]
-        SL["8 · slicers: year, sector,<br/>trust type, region"]
-        RAG["9 · RAG colours"]
-    end
-
-    CD -- "1–3 · import, rename, types" --> DIM
-    CF -- "1–3 · import, rename, types" --> FACT
-    MEAS -. "6 · reads" .-> FACT
-    MEAS --> PG
-    DIM --> SL --> PG
-    MEAS --> RAG --> PG
-
-    classDef file fill:#F5F7FA,stroke:#C9D2DD,color:#14253D
-    classDef model fill:#EDF1F6,stroke:#9AAEC4,color:#14253D
-    classDef report fill:#EAF3EC,stroke:#8FBF9A,color:#14253D
-    class CD,CF file
-    class DIM,FACT,MEAS model
-    class PG,SL,RAG report
-```
-
----
-
-## How It Works in the Model
-
-### Steps 1–3 — Import and rename
-
-Each CSV is imported via **Get Data → Text/CSV** (step 1) and renamed to the `fact_`/`dim_` prefix
-convention (step 2), which is what Power BI's own model view then displays:
+Each CSV is imported via **Get Data → Text/CSV** and renamed on import to the `fact_`/`dim_` prefix
+convention Power BI's own model view then displays:
 
 | CSV | Imported as |
 |-----|---------------|
@@ -121,8 +33,8 @@ convention (step 2), which is what Power BI's own model view then displays:
 | `statement_reconciliation.csv` | `fact_statement_reconciliation` |
 | `sector_benchmarks.csv` | `fact_sector_benchmarks` |
 
-Step 3 checks the column types in **Transform Data**: `financial_year` and `org_code` as Text, and every
-`_000s` and `_pct` column as Decimal Number, because the source holds genuine fractional £000 values.
+Plus one table that isn't a CSV at all: **`_Measures`**, created via *Enter Data → blank table*, holding
+none of the data — only DAX measures, so they have a home not tied to any one fact table.
 
 `fact_profit_and_loss`, `fact_balance_sheet` and `fact_cash_flow` expose the three principal statements.
 `fact_statement_reconciliation` supplies statement-coverage flags and diagnostic residuals. No published
@@ -131,7 +43,9 @@ visuals, reconciliation review and drillthrough. `cash_cross_statement_residual_
 overdrafts back (the balance sheet shows cash gross, the cash-flow statement net);
 `cash_overdrafts_000s` shows that adjustment for any trust-year with an overdraft.
 
-### Step 4 — Model relationships
+---
+
+## Model Relationships
 
 Every fact table joins to the two dimensions on `org_code` and/or `financial_year`, single-direction,
 many-to-one — with one deliberate exception:
@@ -154,13 +68,12 @@ fact_sector_benchmarks[financial_year]                   → dim_financial_year 
 `(sector, trust_type)` in [stage ⑤](../05_data_preparation_for_reporting/README.md)'s SQL, so it has no `org_code` column to join
 on — `sector` and `trust_type` stay unmodelled attributes on the table itself. The resulting eleven-fact star
 diagram, re-exported from Power BI's own model view, is in `project_documentation.md`, stage ⑤.
-`_Measures` (step 5) has no relationships at all.
 
-### Steps 5–6 — DAX measures: 51 in one table
+---
 
-Step 5 creates **`_Measures`** with *Enter Data → blank table*. It holds no data, only measures, so they
-have a home not tied to any one fact table. Step 6 adds the measures. Every one of the 51 lives in
-`_Measures`, never inside a fact table, and never as an implicit
+## DAX Measures — 51 in One Table
+
+Every measure — all 51 — lives in `_Measures`, never inside a fact table, and never as an implicit
 measure dragged straight off a column. Three real patterns cover almost all of them:
 
 ```dax
@@ -208,12 +121,9 @@ Two versions of every measure exist, and only one is authoritative if they ever 
 - **`power_bi/dax/_Measures.tmdl`** — the exact `createOrReplace` export from Power BI Desktop's TMDL
   view, including format strings and lineage tags — **this file wins** on any disagreement
 
-**A new financial year needs a DAX change.** `Prior Year` maps each year to the one before it by name, and
-only knows 2023/24, 2022/23 and 2021/22. A 2024/25 load also needs `"2024/25", "2023/24"` adding to that
-`SWITCH`, or every year-on-year measure is blank for the new year. This is on top of adding the year to
-`dim_financial_year` in the [SQL Guide](../sql_database_guide/README.md#silver-the-star-schema).
+---
 
-### Step 7 — Report pages (specified, publication pending)
+## Report Pages (specified, publication pending)
 
 Full visual-by-visual specifications are in [power_bi/setup_guide.md](../../power_bi/setup_guide.md).
 
@@ -225,15 +135,13 @@ Full visual-by-visual specifications are in [power_bi/setup_guide.md](../../powe
 | Benchmarking | EBITDA distribution, top/bottom performers, peer comparison table |
 | Workforce | WTE trends, cost per WTE, staff cost as % of income |
 
-### Step 8 — Slicers on every page
+`dim_trust[sector]`, `dim_trust[trust_type]`, `dim_trust[region]`, and `dim_financial_year[financial_year]` are placed as slicers
+on every page, filtering all of that page's visuals simultaneously.
 
-Four slicers go on every page and filter all of that page's visuals at once: `dim_financial_year[financial_year]`
-(single-select), `dim_trust[sector]`, `dim_trust[trust_type]` and `dim_trust[region]`.
-
-### Step 9 — The RAG palette
+## The RAG Palette
 
 Read directly out of the `*RAG Colour` measures, not approximated — these four values are the only ones
-used for anything tied to a RAG status, through conditional formatting:
+used for anything tied to a RAG status:
 
 ```text
 Green (sustainable): #009639     Amber (at risk): #FFB81C
@@ -258,7 +166,7 @@ Red (unsustainable):  #DA291C     Grey (no data):  #E8EDEE
 
 | File | What to Read |
 |------|-------------|
-| [power_bi/setup_guide.md](../../power_bi/setup_guide.md) | Steps 1–5 and 7–9: import, relationships, page-by-page visual specs, palette, slicers |
+| [power_bi/setup_guide.md](../../power_bi/setup_guide.md) | Full import steps, relationship list, page-by-page visual specs |
 | [power_bi/dax_measures.md](../../power_bi/dax_measures.md) | All 51 measures, grouped by family, human-readable |
 | [power_bi/dax/_Measures.tmdl](../../power_bi/dax/_Measures.tmdl) | The authoritative, machine-exported measure definitions |
 | [power_bi/CLAUDE.md](../../power_bi/CLAUDE.md) | Naming conventions, standard measure patterns, visual standards |
