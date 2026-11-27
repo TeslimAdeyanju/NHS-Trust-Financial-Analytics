@@ -14,53 +14,52 @@ This document explains the business question, NHS accounting context, implemente
 
 ## Contents
 
-### Part I — Background and Research Context
+**[1.0 Part I — Background and Research Context](#10-part-i--background-and-research-context)**
 
-- [Research Question and Executive Summary](#research-question-and-executive-summary)
-- [NHS Financial Reporting and Sustainability](#nhs-financial-reporting-and-sustainability)
-- [Objectives, Scope and Definitions](#objectives-scope-and-definitions)
+- [1.1 Research Question and Executive Summary](#11-research-question-and-executive-summary)
+- [1.2 NHS Financial Reporting and Sustainability](#12-nhs-financial-reporting-and-sustainability)
+- [1.3 Objectives, Scope and Definitions](#13-objectives-scope-and-definitions)
 
-### Part II — Research Methodology
+**[2.0 Part II — Research Methodology](#20-part-ii--research-methodology)**
 
-**Methodology: Six-Stage Data Analytics Lifecycle**
+- [2.1 Methodology: Six-Stage Data Analytics Lifecycle](#21-methodology-six-stage-data-analytics-lifecycle)
+- [2.2 Stage 1 — Data Sourcing](#22-stage-1--data-sourcing) — obtain authoritative NHS England TAC data and define source controls.
+- [2.3 Stage 2 — Data Ingestion](#23-stage-2--data-ingestion) — capture source workbooks and load raw records to Bronze.
+- [2.4 Stage 3 — Data Cleaning & Transformation](#24-stage-3--data-cleaning--transformation) — standardise, validate and conform records in Silver.
+- [2.5 Stage 4 — Data Modelling & Analytics](#25-stage-4--data-modelling--analytics) — organise dimensions, facts and financial KPIs in Silver and Gold.
+- [2.6 Stage 5 — Data Preparation for Reporting](#26-stage-5--data-preparation-for-reporting) — prepare curated datasets and exports.
+- [2.7 Stage 6 — Data Visualisation & Insights](#27-stage-6--data-visualisation--insights) — design and communicate Power BI financial analysis.
 
-1. [Data Sourcing](#stage-1--data-sourcing) — obtain authoritative NHS England TAC data and define source controls.
-2. [Data Ingestion](#stage-2--data-ingestion) — capture source workbooks and load raw records to Bronze.
-3. [Data Cleaning & Transformation](#stage-3--data-cleaning--transformation) — standardise, validate and conform records in Silver.
-4. [Data Modelling & Analytics](#stage-4--data-modelling--analytics) — organise dimensions, facts and financial KPIs in Silver and Gold.
-5. [Data Preparation for Reporting](#stage-5--data-preparation-for-reporting) — prepare curated datasets and exports.
-6. [Data Visualisation & Insights](#stage-6--data-visualisation--insights) — design and communicate Power BI financial analysis.
+**[3.0 Part III — Findings, Validation and Project Outcomes](#30-part-iii--findings-validation-and-project-outcomes)**
+
+- [3.1 Running the Pipeline](#31-running-the-pipeline)
+- [3.2 Financial Findings and Reconciliation](#32-financial-findings-and-reconciliation)
+- [3.3 Data Quality, Auditability and Limitations](#33-data-quality-auditability-and-limitations)
+- [3.4 Reproducibility and Operational Workflow](#34-reproducibility-and-operational-workflow)
+- [3.5 Project Deliverables and Next Steps](#35-project-deliverables-and-next-steps)
+- [3.6 Glossary and Reference Material](#36-glossary-and-reference-material)
 
 Detailed implementations remain in the stage-specific technical notebooks linked from each section.
 
-### Part III — Findings, Validation and Project Outcomes
-
-- [Running the Pipeline](#running-the-pipeline)
-- [Financial Findings and Reconciliation](#financial-findings-and-reconciliation)
-- [Data Quality, Auditability and Limitations](#data-quality-auditability-and-limitations)
-- [Reproducibility and Operational Workflow](#reproducibility-and-operational-workflow)
-- [Project Deliverables and Next Steps](#project-deliverables-and-next-steps)
-- [Glossary and Reference Material](#glossary-and-reference-material)
-
 ---
 
-# PART I — BACKGROUND AND RESEARCH CONTEXT
+## 1.0 Part I — Background and Research Context
 
-## Research Question and Executive Summary
+### 1.1 Research Question and Executive Summary
 
-### Why I undertook this project
+#### 1.1.1 Why I undertook this project
 
 NHS providers operate under persistent pressure to deliver safe and effective services while managing finite public resources. NHS England publishes Trust Accounts Consolidation (TAC) information that can help explain changes in provider income, operating expenditure, staffing costs and financial balances. However, the relevant information is spread across annual workbooks and accounting schedules, making systematic, cross-year exploration difficult without a repeatable analytical process.
 
 I developed this project to connect **financial reporting knowledge, data engineering and business intelligence**. The intention is to make published financial data easier to analyse while retaining the accounting definitions and audit trails needed for trustworthy reporting.
 
-### Research question
+#### 1.1.2 Research question
 
 > **How is the financial health of NHS Trusts in England changing over time, and which parts of the health system are under the most pressure?**
 
 This question has two parts: the national movement in financial performance, and the distribution of that performance across trusts, provider types and regions. National totals cannot, by themselves, identify the pressures experienced by each organisation or establish the causes of differences.
 
-### What the external evidence currently shows
+#### 1.1.3 What the external evidence currently shows
 
 NHS England's published consolidated provider accounts report a surplus of **£562 million** in 2021/22, a deficit of **£457 million** in 2022/23 and a deficit of **£2.312 billion** in 2023/24, using the **surplus/(deficit) before impairments and transfers** measure. The associated number of providers reporting a deficit increased from **74 of 215** to **105 of 212** and **136 of 211** respectively.
 
@@ -70,9 +69,9 @@ These are **official published benchmarks, not independently reproduced outputs 
 
 ---
 
-## NHS Financial Reporting and Sustainability
+### 1.2 NHS Financial Reporting and Sustainability
 
-### NHS Providers and Their Financial Context
+#### 1.2.1 NHS Providers and Their Financial Context
 
 The **National Health Service (NHS) in England** delivers publicly funded healthcare through organisations responsible for commissioning, overseeing and providing services. **NHS Trusts and NHS Foundation Trusts** are provider organisations that deliver care to patients and communities. Their services, patient populations and operational responsibilities differ.
 
@@ -88,7 +87,7 @@ For this project, the main healthcare service categories are:
 
 Accordingly, **financial comparisons must consider the provider's service category, organisational responsibilities and reporting period.** This project uses the sector classifications reported in the TAC source data rather than assigning categories from provider names.
 
-#### NHS Trust Accounts Consolidation (TAC)
+##### 1.2.1.1 NHS Trust Accounts Consolidation (TAC)
 
 The **Trust Accounts Consolidation (TAC)** data published by NHS England provides financial information for NHS Trusts and NHS Foundation Trusts. Relevant financial statements and supporting schedules include:
 
@@ -104,7 +103,7 @@ However, **financial accounts alone cannot establish the overall quality or effe
 
 **Primary data source:** [NHS England — NHS Providers TAC Data Publications](https://www.england.nhs.uk/financial-accounting-and-reporting/nhs-providers-tac-data-publications/).
 
-### What financial sustainability means
+#### 1.2.2 What financial sustainability means
 
 For this project, financial sustainability means the capacity to meet obligations, manage resources and maintain safe healthcare delivery over time. **Covering annual costs is important but not sufficient**: liquidity, financial plans, cost pressures, productivity, capital commitments and continuity of patient services also matter.
 
@@ -127,13 +126,13 @@ The project evaluates complementary measures:
 
 **Regulatory distinction:** There is no substantiated NHS-wide rule in this repository that an EBITDA margin of 2% establishes financial sustainability or that a negative EBITDA margin automatically triggers regulatory intervention. NHS England uses a wider [oversight framework](https://www.england.nhs.uk/nhs-oversight-framework/) covering financial performance and other domains. Any RAG thresholds in this project are **illustrative, project-defined analytical bands** unless a separately cited official rule applies.
 
-### Accounting comparability across years
+#### 1.2.3 Accounting comparability across years
 
 Account balances can change because of service pressures **and** accounting policies. For example, NHS England reports that 2023/24 treatment of PFI and other service-concession liabilities under IFRS 16 increased the reported deficit by approximately **£1.094 billion**. The impact should be explained when discussing trends; it must not be applied automatically to an individual trust's unrelated operating measure.
 
 ---
 
-## Objectives, Scope and Definitions
+### 1.3 Objectives, Scope and Definitions
 
 The objectives are to:
 
@@ -144,7 +143,7 @@ The objectives are to:
 5. **Keep calculations auditable** through source file, reporting year, trust identifier, worksheet, SubCode, data checks and transformation rules.
 6. **Support financial interpretation and accessible reporting** through analytical SQL and a Power BI model, with dashboard publication as a pending deliverable.
 
-### Scope
+#### 1.3.1 Scope
 
 | Dimension | Definition |
 | --- | --- |
@@ -160,20 +159,20 @@ The warehouse may contain more organisational identifiers than a year-specific a
 
 ---
 
-# PART II — RESEARCH METHODOLOGY
+## 2.0 Part II — Research Methodology
 
-## Methodology: Six-Stage Data Analytics Lifecycle
+### 2.1 Methodology: Six-Stage Data Analytics Lifecycle
 
-### Methodology roadmap
+#### 2.1.1 Methodology roadmap
 
 The methodology is organised as six consecutive stages. Select a stage to go directly to its technical explanation:
 
-1. [Data Sourcing](#stage-1--data-sourcing) — obtain authoritative NHS England TAC data and define source controls.
-2. [Data Ingestion](#stage-2--data-ingestion) — capture source workbooks and load raw records to Bronze.
-3. [Data Cleaning & Transformation](#stage-3--data-cleaning--transformation) — standardise, validate and conform records in Silver.
-4. [Data Modelling & Analytics](#stage-4--data-modelling--analytics) — organise dimensions, facts and financial KPIs in Silver and Gold.
-5. [Data Preparation for Reporting](#stage-5--data-preparation-for-reporting) — prepare curated datasets and exports.
-6. [Data Visualisation & Insights](#stage-6--data-visualisation--insights) — design and communicate Power BI financial analysis.
+1. [Data Sourcing](#22-stage-1--data-sourcing) — obtain authoritative NHS England TAC data and define source controls.
+2. [Data Ingestion](#23-stage-2--data-ingestion) — capture source workbooks and load raw records to Bronze.
+3. [Data Cleaning & Transformation](#24-stage-3--data-cleaning--transformation) — standardise, validate and conform records in Silver.
+4. [Data Modelling & Analytics](#25-stage-4--data-modelling--analytics) — organise dimensions, facts and financial KPIs in Silver and Gold.
+5. [Data Preparation for Reporting](#26-stage-5--data-preparation-for-reporting) — prepare curated datasets and exports.
+6. [Data Visualisation & Insights](#27-stage-6--data-visualisation--insights) — design and communicate Power BI financial analysis.
 
 The project is explained using stages named for **the work performed**, not merely the software or storage location.
 
@@ -196,7 +195,7 @@ The [simplified lifecycle diagram](docs/images/pipeline_architecture_stages.svg)
 
 ---
 
-## Stage 1 — Data Sourcing
+### 2.2 Stage 1 — Data Sourcing
 
 **Purpose.** Establish the source, time frame and accounting basis for the investigation.
 
@@ -210,7 +209,7 @@ The main decisions at this stage are which reporting years to examine, which acc
 
 ---
 
-## Stage 2 — Data Ingestion
+### 2.3 Stage 2 — Data Ingestion
 
 **Purpose.** Bring the published data into a controlled environment while preserving its origin.
 
@@ -223,7 +222,7 @@ The process also captures the financial year, trust type, source filename and SH
 
 ---
 
-## Stage 3 — Data Cleaning & Transformation
+### 2.4 Stage 3 — Data Cleaning & Transformation
 
 **Purpose.** Make financial records consistent and trustworthy enough to combine across reporting years.
 
@@ -236,7 +235,7 @@ Validated information is organised in the Silver layer, where providers and acco
 
 ---
 
-## Stage 4 — Data Modelling & Analytics
+### 2.5 Stage 4 — Data Modelling & Analytics
 
 **Purpose.** Transform accounting records into meaningful financial indicators and comparisons.
 
@@ -250,7 +249,7 @@ The SoFP-to-SoCF closing-cash exceptions above £1k are explained by bank overdr
 
 ---
 
-## Stage 5 — Data Preparation for Reporting
+### 2.6 Stage 5 — Data Preparation for Reporting
 
 **Purpose.** Prepare consistent datasets for a business intelligence report.
 
@@ -264,7 +263,7 @@ Thirteen canonical files are written to `data/processed/powerbi_export/`. Nine e
 
 ---
 
-## Stage 6 — Data Visualisation & Insights
+### 2.7 Stage 6 — Data Visualisation & Insights
 
 **Purpose.** Turn validated financial analysis into information that finance professionals and board members can understand and explore.
 
@@ -278,9 +277,9 @@ The dashboard is **not yet published**. Its final results should be produced onl
 
 ---
 
-# PART III — FINDINGS, VALIDATION AND PROJECT OUTCOMES
+## 3.0 Part III — Findings, Validation and Project Outcomes
 
-## Running the Pipeline
+### 3.1 Running the Pipeline
 
 Build a fresh local MySQL environment, then run the pipeline from source workbook to reporting export. MySQL 9
 requires `--commands` when a batch script uses the client-side `SOURCE` command:
@@ -307,9 +306,9 @@ trust-level analysis is in the
 The broader accounting bridge to NHS England's published before-impairments-and-transfers balance remains open
 and must not be described as reconciled.
 
-## Financial Findings and Reconciliation
+### 3.2 Financial Findings and Reconciliation
 
-### Published national benchmarks
+#### 3.2.1 Published national benchmarks
 
 The authoritative external benchmarks for this period, based on the NHS England definition **before impairments and transfers**, are:
 
@@ -321,13 +320,13 @@ The authoritative external benchmarks for this period, based on the NHS England 
 
 *These are official NHS England observations, not independently reproduced project results.* The trend indicates deterioration in the reported balance, but the accounting-policy changes and below-operating items require care in attributing its causes.
 
-### Why the old project headline does not reconcile
+#### 3.2.2 Why the old project headline does not reconcile
 
 Previous versions of the project reported operating results of approximately **+£1.6bn**, **+£148m** and **−£1.6bn** over the same period and counted 37, 85 and 124 trusts in operating deficit. Those figures were not independently reproduced during this documentation review. They reflect a **different measure and potentially a different population** from the published series. A subtraction of one from the other is a diagnostic gap, not an explained accounting reconciliation.
 
 The [financial reconciliation workpaper](reports/nhs_financial_reconciliation.md) records the preliminary comparison, a verified published 2022/23 accounting bridge, relevant code issues, diagnostic SQL, and tasks required to complete the work.
 
-### Requirements for completing the reconciliation
+#### 3.2.3 Requirements for completing the reconciliation
 
 - Re-obtain the exact six official workbooks and validate their contents and provider rosters.
 - Generate per-trust/year output for `SCI0140A`, `SCI0240` and relevant below-operating items.
@@ -342,9 +341,9 @@ No number should be changed solely to match an external benchmark. Unresolved di
 
 ---
 
-## Data Quality, Auditability and Limitations
+### 3.3 Data Quality, Auditability and Limitations
 
-### Controls that make the project credible
+#### 3.3.1 Controls that make the project credible
 
 **Source traceability:** The chain should retain source filename → provider/ODS code → year → worksheet → SubCode → raw amount → transformation → analytical KPI. Store an import identifier, checksum and exceptions alongside the actual results where available.
 
@@ -356,7 +355,7 @@ No number should be changed solely to match an external benchmark. Unresolved di
 
 **Statistical interpretation:** A higher spending percentage or a negative margin can identify areas for investigation but is not proof of inefficiency, poor management or reduced service quality.
 
-### Implementation and security issues requiring follow-up
+#### 3.3.2 Implementation and security issues requiring follow-up
 
 | Observation | Impact | Status |
 | --- | --- | --- |
@@ -371,15 +370,15 @@ No number should be changed solely to match an external benchmark. Unresolved di
 
 **Credential guidance:** all database scripts require an environment-supplied `DB_PASSWORD`; user, host and port also support environment overrides. Never commit real passwords, and rotate any password previously exposed in Git history.
 
-### Meaning of validation in this project
+#### 3.3.3 Meaning of validation in this project
 
 A *passed automated check* means its specified rule passed during that run. It does **not** independently establish that every accounting field is correct or that published NHS balances have been reproduced. Final sign-off requires row-level/source-level evidence and a transparent reconciliation bridge.
 
 ---
 
-## Reproducibility and Operational Workflow
+### 3.4 Reproducibility and Operational Workflow
 
-### Prerequisites
+#### 3.4.1 Prerequisites
 
 - Supported Python installation and dependencies from the repository environment/requirements files.
 - A locally available MySQL server with sufficient disk capacity for the TAC extracts.
@@ -387,7 +386,7 @@ A *passed automated check* means its specified rule passed during that run. It d
 - Appropriate environment-based database credentials.
 - Power BI Desktop for the downstream reporting model, if using the planned dashboard workflow.
 
-### Intended sequence
+#### 3.4.2 Intended sequence
 
 ```text
 1. Obtain and register source workbooks (Stage 1).
@@ -414,13 +413,13 @@ Reproduction still requires the six local source workbooks, MySQL and environmen
 
 The SQL views under `sql/views/` and schema scripts under `sql/schema/` must be applied in dependency order. The extensive `create_tables_mysql.sql` includes database objects and must be reviewed for destructive `DROP` operations before running against any valued database. The project should eventually offer a versioned setup script and automated integration test that confirm schema, ingestion, uniqueness, financial mapping, export consistency and replay behaviour.
 
-### Outputs to retain for an auditable run
+#### 3.4.3 Outputs to retain for an auditable run
 
 A reproducible run should archive checksums of six TAC inputs, schema/script revision, Python environment metadata, row counts, provider/year coverage, validation report, exported reporting tables and a signed-off financial reconciliation summary.
 
 ---
 
-## Project Deliverables and Next Steps
+### 3.5 Project Deliverables and Next Steps
 
 | Deliverable | Repository evidence | Status |
 | --- | --- | --- |
@@ -433,7 +432,7 @@ A reproducible run should archive checksums of six TAC inputs, schema/script rev
 | Power BI modelling and DAX design | `power_bi/` | Design assets provided; published dashboard pending |
 | Full reproducible validated case study | Source-to-report run, reconciled results, verified dashboard | Technical source-to-report run complete; accounting bridge and published dashboard outstanding |
 
-### Recommended order of completion
+#### 3.5.1 Recommended order of completion
 
 1. ~~Investigate and explain the four SoFP-to-SoCF closing-cash exceptions.~~ Explained as bank overdrafts; `v_statement_reconciliation` now applies the overdraft bridge.
 2. Complete the bridge from TAC measures to NHS England's official before-impairments-and-transfers balances.
@@ -441,13 +440,13 @@ A reproducible run should archive checksums of six TAC inputs, schema/script rev
 4. Produce and test a genuine Power BI report with reconciled values, then add screenshots and publication details.
 5. Update the concise [README](README.md) with the final independently validated findings.
 
-### What the project demonstrates
+#### 3.5.2 What the project demonstrates
 
 Even in its current state, the repository demonstrates a coherent approach to handling public-sector financial datasets: source identification, repeatable ingestion, dimensional modelling, accounting-coded SQL, data validation, KPI specification and reporting design. The unfinished reconciliation and reporting work is explicitly disclosed rather than presented as completed impact.
 
 ---
 
-## Glossary and Reference Material
+### 3.6 Glossary and Reference Material
 
 | Term | Meaning |
 | --- | --- |
@@ -464,7 +463,7 @@ Even in its current state, the repository demonstrates a coherent approach to ha
 | Bronze / Silver / Gold | Raw landing / conformed data / curated analytical presentation layers |
 | Reconciliation | Explaining the bridge between defined accounting measures and published statements |
 
-### Primary references
+#### 3.6.1 Primary references
 
 - [NHS England TAC publications](https://www.england.nhs.uk/financial-accounting-reporting-systems/nhs-england-finance-returns-publications-guidance/trust-accounts-consolidation-tac/)
 - [NHS provider consolidated accounts 2021/22](https://www.gov.uk/government/publications/consolidated-nhs-provider-accounts-2021-to-2022)
@@ -472,7 +471,7 @@ Even in its current state, the repository demonstrates a coherent approach to ha
 - [NHS provider consolidated accounts 2023/24](https://www.gov.uk/government/publications/consolidated-nhs-provider-accounts-2023-to-2024)
 - [NHS England Oversight Framework](https://www.england.nhs.uk/nhs-oversight-framework/)
 
-### Repository technical references
+#### 3.6.2 Repository technical references
 
 - [Financial reconciliation and accounting bridge](reports/nhs_financial_reconciliation.md)
 - [Financial review and earlier analytical findings](reports/nhs_sector_financial_review_2324.md) — **requires reconciliation review**
