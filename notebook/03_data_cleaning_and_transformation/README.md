@@ -1,3 +1,9 @@
+---
+markmap:
+  initialExpandLevel: 2
+  colorFreezeLevel: 2
+---
+
 # Stage 3: Data Cleaning & Transformation
 
 **Implementation:** Quality checks, source standardisation and conforming into Silver dimensions/facts.

@@ -1,3 +1,9 @@
+---
+markmap:
+  initialExpandLevel: 2
+  colorFreezeLevel: 2
+---
+
 # Stage 6: Data Visualisation & Insights
 
 **Implementation:** Power BI semantic model, DAX and proposed report pages (publication pending).

@@ -1,3 +1,9 @@
+---
+markmap:
+  initialExpandLevel: 2
+  colorFreezeLevel: 2
+---
+
 # Stage 4: Data Modelling & Analytics
 
 **Implementation:** MySQL Silver star schema and Gold SQL reporting views / KPI calculations.

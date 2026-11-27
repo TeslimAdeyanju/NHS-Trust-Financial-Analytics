@@ -1,3 +1,9 @@
+---
+markmap:
+  initialExpandLevel: 2
+  colorFreezeLevel: 2
+---
+
 # Stage 5: Data Preparation for Reporting
 
 **Implementation:** Export of curated Gold analytical views as CSVs for Power BI.

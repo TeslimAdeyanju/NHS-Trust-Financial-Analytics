@@ -1,3 +1,9 @@
+---
+markmap:
+  initialExpandLevel: 2
+  colorFreezeLevel: 2
+---
+
 # Stage 2: Data Ingestion
 
 **Implementation:** Original Excel workbooks downloaded manually to `data/raw/`; Python reads them and lands them in Bronze staging.

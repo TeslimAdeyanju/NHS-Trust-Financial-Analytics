@@ -1,3 +1,9 @@
+---
+markmap:
+  initialExpandLevel: 2
+  colorFreezeLevel: 2
+---
+
 # Stage 1: Data Sourcing
 
 **Implementation:** NHS England TAC publications and source provenance.
