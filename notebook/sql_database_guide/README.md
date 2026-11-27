@@ -77,7 +77,7 @@ Each Bronze table has one job:
 ```sql
 CREATE TABLE import_batch (
     import_id               BIGINT        NOT NULL AUTO_INCREMENT PRIMARY KEY,
-    source_file             VARCHAR(200)  NOT NULL,   -- e.g. TAC_NHS_trusts_2023-24.xlsx
+    source_file             VARCHAR(200)  NOT NULL,   -- e.g. tac_nhs_trusts_2023_24.xlsx
     source_sha256           CHAR(64)      NOT NULL,   -- fingerprint of the file's exact bytes
     file_size_bytes         BIGINT        NOT NULL,
     financial_year          CHAR(7)       NOT NULL,

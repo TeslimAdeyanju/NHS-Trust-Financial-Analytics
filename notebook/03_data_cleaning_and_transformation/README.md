@@ -157,7 +157,7 @@ left half-updated.
 
 ### The full flow for one workbook
 
-`main()` finds every `TAC_NHS_*.xlsx` file in `data/raw/` (skipping the illustrative workbook), sorts them
+`main()` finds every `tac_nhs_*.xlsx` file in `data/raw/` with `find_tac_files()` (skipping the illustrative workbook), sorts them
 by name, and passes each one to `process_file()`. For each file, these functions run in this order. The
 **Source** column shows which Python file each function lives in.
 
@@ -165,7 +165,7 @@ by name, and passes each one to `process_file()`. For each file, these functions
 
 | # | Function | Source | What it does | Writes to MySQL |
 |---|----------|--------|--------------|-----------------|
-| 1 | `filename_to_financial_year()` | [`load_tac_data.py`](../../python/ingestion/load_tac_data.py) | `…_2021-22.xlsx` → `2021/22` | — |
+| 1 | `filename_to_financial_year()` | [`load_tac_data.py`](../../python/ingestion/load_tac_data.py) | `…_2021_22.xlsx` → `2021/22` | — |
 | 2 | `filename_to_trust_type()` | [`load_tac_data.py`](../../python/ingestion/load_tac_data.py) | `foundation` in the name → `FOUNDATION_TRUST`, otherwise `NHS_TRUST` | — |
 | 3 | `sha256_file()` | [`source_integrity.py`](../../python/ingestion/source_integrity.py) | Fingerprints the file's bytes, e.g. `e70b6db7…` | — |
 
@@ -494,8 +494,8 @@ the 2021/22 Foundation Trusts workbook.
 
 | organisation_name | worksheet_name | main_code | row_num | sub_code | total | **year_type** | **provider_name_key** | **source_file** | **source_sha256** | **trust_type** | **financial_year** |
 |---|---|---|---:|---|---:|---|---|---|---|---|---|
-| Airedale NHS Foundation Trust | TAC02 SoCI | A02CY01 | 12 | SCI0100A | 218758.00000 | CY | airedale nhs foundation trust | TAC_NHS_foundation_trusts_2021-22.xlsx | e70b6db7… | FOUNDATION_TRUST | 2021/22 |
-| Airedale NHS Foundation Trust | TAC02 SoCI | A02PY01 | 12 | SCI0100A | 196771.00000 | PY | airedale nhs foundation trust | TAC_NHS_foundation_trusts_2021-22.xlsx | e70b6db7… | FOUNDATION_TRUST | 2021/22 |
+| Airedale NHS Foundation Trust | TAC02 SoCI | A02CY01 | 12 | SCI0100A | 218758.00000 | CY | airedale nhs foundation trust | tac_nhs_foundation_trusts_2021_22.xlsx | e70b6db7… | FOUNDATION_TRUST | 2021/22 |
+| Airedale NHS Foundation Trust | TAC02 SoCI | A02PY01 | 12 | SCI0100A | 196771.00000 | PY | airedale nhs foundation trust | tac_nhs_foundation_trusts_2021_22.xlsx | e70b6db7… | FOUNDATION_TRUST | 2021/22 |
 
 Both rows are kept: the current-year figure, and the prior-year comparison, which is the 2020/21
 figure as shown in this workbook. Each now records which year it belongs to, how it will be matched to its ODS

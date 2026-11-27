@@ -1,52 +1,151 @@
 # Stage 2: Data Ingestion
 
-**Implementation:** Original Excel workbooks downloaded manually to `data/raw/`; Python reads them and lands them in Bronze staging.
+**Implementation:** Original Excel workbooks downloaded manually to `data/raw/`; Python finds them and reads
+their two sheets.
 
-> This stage is about understanding the exact shape of the data before any code runs. The Python
-> pipeline receives these files and has to deal with exactly what NHS England published — no cleaning,
-> no reformatting, nothing assumed.
+> This stage is about the exact shape of the data before any cleaning: which files there are, what is
+> inside them, and how the loader finds and opens them. The pipeline has to deal with exactly what NHS
+> England published, with nothing assumed.
 
 ---
 
-## The 6 Files
+## How the Files Reach Python
+
+- **The files are downloaded by hand** into `data/raw/` ([stage ①](../01_data_sourcing/README.md)). The
+  folder is git-ignored, and the files are never edited.
+- **Python finds them by name.** [`load_tac_data.py`](../../python/ingestion/load_tac_data.py) picks up every `tac_nhs_*.xlsx` file in `data/raw/`, whatever the
+  capitalisation, and skips the illustrative workbook.
+- **The file name carries two facts** the workbook doesn't: the financial year and the trust type.
+- **Python reads two sheets** from each file into memory. Nothing is written to the database in this
+  stage; cleaning, checking and loading are [stage ③](../03_data_cleaning_and_transformation/README.md).
+
+### The reading steps, one file at a time
+
+These are the steps of the [stage ③ flow](../03_data_cleaning_and_transformation/README.md#the-full-flow-for-one-workbook)
+that touch the raw file, with the same numbers. Step 0 runs once for the whole folder.
+
+**A. Find the files** (once per run)
+
+| # | Function | Source | What it reads | Result |
+|---|----------|--------|---------------|--------|
+| 0 | `find_tac_files()` | [`load_tac_data.py`](../../python/ingestion/load_tac_data.py) | The file names in `data/raw/` | The six data workbooks, sorted by name |
+
+**B. Read the file name** (per file)
+
+| # | Function | Source | What it reads | Result |
+|---|----------|--------|---------------|--------|
+| 1 | `filename_to_financial_year()` | [`load_tac_data.py`](../../python/ingestion/load_tac_data.py) | The year in the name | `…_2021_22.xlsx` → `2021/22` |
+| 2 | `filename_to_trust_type()` | [`load_tac_data.py`](../../python/ingestion/load_tac_data.py) | Whether the name contains `foundation` | `FOUNDATION_TRUST` or `NHS_TRUST` |
+| 3 | `sha256_file()` | [`source_integrity.py`](../../python/ingestion/source_integrity.py) | The file's bytes | A fingerprint of this exact version of the file |
+
+**C. Open the two sheets** (per file)
+
+| # | Function | Source | What it reads | Result |
+|---|----------|--------|---------------|--------|
+| 5 | `read_provider_list()` | [`load_tac_data.py`](../../python/ingestion/load_tac_data.py) | The "List of Providers" sheet | A DataFrame of trust names and ODS codes |
+| 6 | `read_all_data()` | [`load_tac_data.py`](../../python/ingestion/load_tac_data.py) | The "All data" sheet, found by `find_sheet_name()` | A DataFrame of every reported amount, with standard column names |
+
+Step 4 (logging the file in `import_batch`) is the one step in that range that writes to the database, so
+it belongs to stage ③.
+
+```mermaid
+%%{init: {"flowchart": {"nodeSpacing": 20, "rankSpacing": 45, "curve": "basis"}, "themeVariables": {"fontSize": "14px"}}}%%
+flowchart LR
+    subgraph RAW["data/raw/"]
+        direction TB
+        F1["tac_nhs_trusts_YYYY_YY.xlsx ×3"]
+        F2["tac_nhs_foundation_trusts_YYYY_YY.xlsx ×3"]
+        IL["tac_illustrative_2023_24.xlsx"]
+    end
+
+    subgraph PY["load_tac_data.py"]
+        direction TB
+        S0["0 · find_tac_files()"]
+        S12["1–2 · year and trust type<br/>from the file name"]
+        S3["3 · sha256_file()"]
+        S5["5 · read_provider_list()"]
+        S6["6 · read_all_data()"]
+        S0 --> S12 --> S3 --> S5 --> S6
+    end
+
+    OUT["Two DataFrames in memory<br/>→ stage 3: clean, check, load"]
+
+    F1 & F2 --> S0
+    IL -. skipped .-> S0
+    S6 --> OUT
+
+    classDef file fill:#F8EFE4,stroke:#D4A373,color:#14253D
+    classDef skip fill:#F5F7FA,stroke:#C9D2DD,color:#8A96A3
+    class F1,F2 file
+    class IL skip
+```
+
+---
+
+## How It Works in the Code
+
+### Step 0 — the six files
 
 ```text
 data/raw/
-  tac_nhs_trusts_2021_22.xlsx             16MB  —  70 provider-list rows
-  tac_nhs_foundation_trusts_2021_22.xlsx  33MB  — 145 provider-list rows
-  tac_nhs_trusts_2022_23.xlsx             20MB  —  69 provider-list rows
-  tac_nhs_foundation_trusts_2022_23.xlsx  36MB  — 144 provider-list rows
-  tac_nhs_trusts_2023_24.xlsx             18MB  —  68 provider-list rows
-  tac_nhs_foundation_trusts_2023_24.xlsx  38MB  — 143 provider-list rows
+  tac_nhs_trusts_2021_22.xlsx
+  tac_nhs_foundation_trusts_2021_22.xlsx
+  tac_nhs_trusts_2022_23.xlsx
+  tac_nhs_foundation_trusts_2022_23.xlsx
+  tac_nhs_trusts_2023_24.xlsx
+  tac_nhs_foundation_trusts_2023_24.xlsx
+  tac_illustrative_2023_24.xlsx            ← reference only, skipped
 ```
 
 **Why 2 files per year?** NHS Trusts and Foundation Trusts are published separately. Same column
-structure, different populations. The pipeline treats them identically — the filename tells the code
-which type it is.
+structure, different populations. The pipeline treats them identically; the file name tells the code which
+type it is.
 
-**Why are they large?** Long/narrow format — roughly 7,000 rows per listed provider, covering both the
-current year and the prior-year comparison. The 2023/24 NHS Trusts file alone has 481,140 rows for 68
-listed providers.
+**Why are they large?** They're in long/narrow format: roughly 7,000 rows per listed provider, covering both
+the current year and the prior-year comparison.
 
-**The illustrative file** (`tac_illustrative_2023_24.xlsx`) is a reference schema file showing every
-SubCode and its description, not real trust data. The pipeline explicitly skips it:
+**The illustrative file** (`tac_illustrative_2023_24.xlsx`) is a reference file showing every SubCode and
+its description, not real trust data. `find_tac_files()` skips it, and matches the data files whatever
+their capitalisation, so both `tac_nhs_trusts_2021_22.xlsx` and NHS England's original
+`TAC_NHS_trusts_2021-22.xlsx` style work:
 
 ```python
-# python/ingestion/load_tac_data.py
-files = sorted(
-    p for p in RAW_DIR.glob("TAC_NHS_*.xlsx")
-    if "illustrative" not in p.name.lower()
-)
+def find_tac_files(raw_dir: Path) -> list[Path]:
+    return sorted(
+        (
+            p for p in raw_dir.glob("*.xlsx")
+            if p.name.lower().startswith("tac_nhs_")
+            and "illustrative" not in p.name.lower()
+        ),
+        key=lambda p: p.name.lower(),
+    )
 ```
 
----
+Sorting by name means all Foundation Trust years load before all NHS Trust years, not in date order.
+Stage ④'s `dim_trust` load is written so that order doesn't matter.
 
-## Inside Each File: Two Sheets That Matter
+### Steps 1–2 — what the pipeline reads from the file name
 
-### Sheet 1 — "List of Providers"
+Two facts live only in the file name, not inside the workbook:
 
-Small annual lookup table, one row per listed provider (68–70 NHS Trust rows or 143–145 Foundation Trust
-rows in the verified files). Not every listed provider necessarily has populated CY fact rows.
+```python
+YEAR_RE = re.compile(r"(\d{4})[-_](\d{2})")   # 2023-24 or 2023_24
+
+def filename_to_financial_year(filename: str) -> str:
+    match = YEAR_RE.search(filename)
+    return f"{match.group(1)}/{match.group(2)}"   # "2023_24" → "2023/24"
+
+def filename_to_trust_type(filename: str) -> str:
+    return "FOUNDATION_TRUST" if "foundation" in filename.lower() else "NHS_TRUST"
+```
+
+Both `financial_year` and `trust_type` are attached to every row of the file as extra columns. Rename a
+file wrongly and the pipeline mis-tags every row inside it, so the exact file names matter.
+
+### Step 5 — Sheet 1, "List of Providers"
+
+A small lookup table, one row per listed provider, read by `read_provider_list()`. Not every listed
+provider necessarily has populated current-year figures.
 
 | Column | Example |
 | ------ | ------- |
@@ -71,12 +170,10 @@ df = df[
 ]
 ```
 
-### Sheet 2 — "All data"
+### Step 6 — Sheet 2, "All data"
 
-The main data sheet: about 433,000–481,000 rows per NHS Trusts file and 884,000–1,006,000 per Foundation
-Trusts file (the rows preserved in Bronze in the verified run), long/narrow, exactly 7 columns. Each row is one reported amount: the trust and TAC schedule identify the context,
-`TableID` and `MainCode` locate the source table and column, and `RowNumber` and `SubCode` identify the
-line item.
+The main data sheet, read by `read_all_data()` after `find_sheet_name()` has found it as "All data" or "All
+Data". It is long and narrow: hundreds of thousands of rows per file, but exactly 7 columns.
 
 | Source column | What it identifies | Example from the screenshot |
 | ------------- | ------------------ | --------------------------- |
@@ -88,8 +185,9 @@ line item.
 | `SubCode` | Financial line item | `SCI0100A` |
 | `Value number` | Amount, in £000s | `218,758.00` |
 
-Each row is one reported amount. The schedule and table show where it came from; `MainCode` identifies its
-column; `RowNumber` and `SubCode` identify the line item. The value is in £000s.
+Each row is one reported amount: the trust and TAC schedule give the context, `TableID` and `MainCode`
+locate the source table and column, `RowNumber` and `SubCode` identify the line item, and the value is in
+£000s.
 
 ![2021/22 All data rows for Airedale NHS Foundation Trust. The visible fields are Organisation Name, WorkSheetName, TableID, MainCode, RowNumber, SubCode, and Value number.](../../docs/images/data_sample.png)
 
@@ -112,9 +210,7 @@ only populated CY rows are promoted to the Silver fact table
 ([stage ④](../04_data_modelling_and_analytics/README.md)), so comparison years are never counted twice
 when workbooks are combined.
 
----
-
-## A Key Inconsistency Across File Versions
+### Step 6 — a key inconsistency across file versions
 
 NHS England changed column names between 2021/22 and later files:
 
@@ -123,7 +219,7 @@ NHS England changed column names between 2021/22 and later files:
 | `Organisation Name`   | `OrganisationName`   | Trust name        |
 | `Value number`        | `Total`               | The £000s value   |
 
-The pipeline handles this silently:
+`read_all_data()` handles this with a rename map:
 
 ```python
 col_map = {
@@ -138,26 +234,6 @@ Without this, pandas would produce a DataFrame with an unexpected column name an
 with a missing-column error on the 2021/22 files specifically. This is a real-world data-engineering
 problem: an external source changed format mid-series, and the pipeline has to absorb that transparently
 rather than special-casing "the old files" by hand.
-
----
-
-## What the Pipeline Reads from the Filename — Before Opening the File
-
-Two critical facts live only in the filename, not inside the workbook:
-
-```python
-YEAR_RE = re.compile(r"(\d{4})-(\d{2})")
-
-def filename_to_financial_year(filename: str) -> str:
-    match = YEAR_RE.search(filename)
-    return f"{match.group(1)}/{match.group(2)}"   # "2023-24" → "2023/24"
-
-def filename_to_trust_type(filename: str) -> str:
-    return "FOUNDATION_TRUST" if "foundation" in filename.lower() else "NHS_TRUST"
-```
-
-Both `financial_year` and `trust_type` are attached to every row of data as extra columns before anything
-else happens. Rename a file and the pipeline mis-tags every row inside it — the exact filenames matter.
 
 ---
 
@@ -177,6 +253,7 @@ else happens. Rename a file and the pipeline mis-tags every row inside it — th
 
 | What you see in the raw file              | What it means                                         |
 |---------------------------------------------|----------------------------------------------------------|
+| Year and trust type only in the file name   | `find_tac_files()` accepts `tac_nhs_…_2021_22` or `TAC_NHS_…_2021-22`; the name is parsed for both |
 | 2 sheets per file                           | "List of Providers" = lookup; "All data" = facts        |
 | 7 columns in "All data"                     | Minimal structure to identify any line for any trust     |
 | CY and PY rows mixed                        | Preserve both in Bronze; promote CY to Silver            |
@@ -193,7 +270,7 @@ else happens. Rename a file and the pipeline mis-tags every row inside it — th
 | `data/raw/` (git-ignored, local only) | Open any TAC `.xlsx` in Excel — examine both sheets directly |
 | [agent_docs/data_dictionary.md](../../agent_docs/data_dictionary.md) | Full SubCode reference, MainCode format, data-quality notes |
 | [project_documentation.md](../../project_documentation.md), stage ② | The narrative version, plus the "how I sourced the data" story |
-| [python/ingestion/load_tac_data.py](../../python/ingestion/load_tac_data.py) | `filename_to_financial_year()`, `filename_to_trust_type()`, `read_provider_list()`, `read_all_data()` |
+| [python/ingestion/load_tac_data.py](../../python/ingestion/load_tac_data.py) | `find_tac_files()`, `filename_to_financial_year()`, `filename_to_trust_type()`, `find_sheet_name()`, `read_provider_list()`, `read_all_data()` |
 
 ---
 
