@@ -32,7 +32,7 @@ This project was motivated by a need to understand the growing financial pressur
 
 **Why it matters:** The figures reveal a widening financial sustainability challenge and make it important to investigate which providers and spending categories face the greatest pressure. They do not, by themselves, establish a single cause of the deterioration.
 
-**Basis and limitations:** The figures above come from NHS England's official consolidated provider accounts, not the project's SQL measure. The project pipeline has now been freshly executed and its source, grain, provider mapping and three-statement controls validated. However, the TAC-derived operating measure (`SCI0140A`) is different from the official before-impairments-and-transfers balance and still requires a like-for-like accounting bridge. Four SoFP-to-SoCF closing-cash differences above £1k have been traced to bank overdrafts, which the balance sheet and cash-flow statement treat differently by design; with overdrafts added back, all three statements agree for every trust-year.
+**Basis and limitations:** The figures above come from NHS England's official consolidated provider accounts, not the project's SQL measure. The pipeline checks its source, grain and provider mapping on every load (the quality gate in `load_tac_data.py`), and `validate_tac_data.py` re-checks grain, coverage and the three-statement reconciliation after each load. However, the TAC-derived operating measure (`SCI0140A`) is different from the official before-impairments-and-transfers balance and still requires a like-for-like accounting bridge. Four SoFP-to-SoCF closing-cash differences above £1k have been traced to bank overdrafts, which the balance sheet and cash-flow statement treat differently by design; with overdrafts added back, all three statements agree for every trust-year.
 
 The 2023/24 deficit includes a £1.094 billion impact from changes in the accounting treatment of PFI liabilities under IFRS 16, affecting comparability.
 
@@ -80,7 +80,7 @@ The implementation uses MySQL Bronze, Silver and Gold layers. Detailed schemas, 
 | [SQL Guide](notebook/sql_database_guide/README.md) | How the MySQL schema builds Bronze, Silver and Gold, and how the views work |
 | [Power BI Setup Guide](power_bi/setup_guide.md) | Relationships and proposed report pages |
 | [DAX Measures](power_bi/dax_measures.md) | Financial reporting calculations |
-| [NHS KPI Definitions](agent_docs/kpi_definitions.md) | Definitions and reporting conventions |
+| [KPI Definitions](sql/views/v_kpis.sql) | The four implemented KPIs, their formulas and RAG bands (header comment) |
 | [Development Notes](notebook/) | Stage-by-stage implementation history |
 
 **Source:** [NHS England Trust Accounts Consolidation publications](https://www.england.nhs.uk/financial-accounting-reporting-systems/nhs-england-finance-returns-publications-guidance/trust-accounts-consolidation-tac/).
