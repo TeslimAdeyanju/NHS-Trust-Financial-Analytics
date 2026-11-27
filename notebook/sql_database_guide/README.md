@@ -66,7 +66,7 @@ already has the tables, at the cost of the data in them.
 
 Each Bronze table has one job:
 
-| Table | One row per | Written by (Python file → function) | Purpose |
+| SQL table | One row per | Written by (Python file → function) | Purpose |
 |-------|-------------|-------------------------------------|---------|
 | `import_batch` | Source file (by name and fingerprint) | [`load_tac_data.py`](../../python/ingestion/load_tac_data.py) → `record_import_batch()` | The audit log: which file was loaded, when, its row counts and gate results, and whether it succeeded |
 | `stg_provider_list` | Trust in a workbook's "List of Providers" sheet | [`load_tac_data.py`](../../python/ingestion/load_tac_data.py) → `load_staging()` | The lookup that turns a trust name into its ODS code |

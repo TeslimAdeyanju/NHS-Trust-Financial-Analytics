@@ -29,12 +29,12 @@ the file's data is already in Bronze. Two functions move it into Silver. Each op
 `get_engine(STG_DB)` to read Bronze and `get_engine(SILVER_DB)` to write Silver, and the data passes
 through Python (as a pandas DataFrame) on its way between the two databases:
 
-| # | Function | Reads (SQL on Bronze) | Writes (SQL on Silver) | Why |
+| # | Python file → function | Reads (SQL on Bronze) | Writes (SQL on Silver) | Why |
 |---|----------|-----------------------|------------------------|-----|
-| 1 | `populate_dim_trust()` | `SELECT DISTINCT org_code, organisation_name, sector, region, trust_type FROM stg_provider_list` for this file only | `INSERT INTO dim_trust ... ON DUPLICATE KEY UPDATE` | `fct_tac.org_code` has a foreign key to `dim_trust`, so every trust must exist before its facts |
-| 2 | `promote_to_fact()` | `SELECT DISTINCT worksheet_name FROM stg_tac_raw` for this file | `INSERT IGNORE INTO dim_worksheet` | `fct_tac.worksheet_name` has a foreign key to `dim_worksheet`, so every schedule must exist first |
-| 3 | `promote_to_fact()` | `stg_tac_raw JOIN stg_provider_list` on the name key, current year and non-blank amounts only | — | Attaches the ODS code to every figure |
-| 4 | `promote_to_fact()` | — | One transaction: `DELETE FROM fct_tac` for this file's year and type, then `INSERT ... ON DUPLICATE KEY UPDATE` in chunks of 1,000 | Replaces this file's slice of the fact table, and only that slice |
+| 1 | [`load_tac_data.py`](../../python/ingestion/load_tac_data.py) → `populate_dim_trust()` | `SELECT DISTINCT org_code, organisation_name, sector, region, trust_type FROM stg_provider_list` for this file only | `INSERT INTO dim_trust ... ON DUPLICATE KEY UPDATE` | `fct_tac.org_code` has a foreign key to `dim_trust`, so every trust must exist before its facts |
+| 2 | [`load_tac_data.py`](../../python/ingestion/load_tac_data.py) → `promote_to_fact()` | `SELECT DISTINCT worksheet_name FROM stg_tac_raw` for this file | `INSERT IGNORE INTO dim_worksheet` | `fct_tac.worksheet_name` has a foreign key to `dim_worksheet`, so every schedule must exist first |
+| 3 | [`load_tac_data.py`](../../python/ingestion/load_tac_data.py) → `promote_to_fact()` | `stg_tac_raw JOIN stg_provider_list` on the name key, current year and non-blank amounts only | — | Attaches the ODS code to every figure |
+| 4 | [`load_tac_data.py`](../../python/ingestion/load_tac_data.py) → `promote_to_fact()` | — | One transaction: `DELETE FROM fct_tac` for this file's year and type, then `INSERT ... ON DUPLICATE KEY UPDATE` in chunks of 1,000 | Replaces this file's slice of the fact table, and only that slice |
 
 Three SQL patterns do most of the work here:
 
