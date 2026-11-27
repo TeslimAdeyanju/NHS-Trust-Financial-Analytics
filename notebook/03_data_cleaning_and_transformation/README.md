@@ -212,7 +212,73 @@ Two points about this order:
   own transaction, so if step 12 fails, the new Bronze rows and `dim_trust` updates stay, while `fct_tac`
   rolls back to its previous state.
 
-![One workbook, Python to MySQL: load_tac_data.py logs import_batch STARTED in nhs_bronze, reads the "List of Providers" and "All data" sheets from the Excel workbook, standardises them, tags CY/PY, builds the name key and runs the validate() quality gate. If a check fails, import_batch records FAILED with the reason and no staging or Silver rows are written. If all checks pass, import_batch records VALIDATED with counts, the file's slice of stg_provider_list and stg_tac_raw is deleted and reinserted, populate_dim_trust() and promote_to_fact() write dim_trust, dim_worksheet and fct_tac in nhs_silver, and import_batch records LOADED.](../../docs/images/stage3_workbook_load_flow.png)
+```mermaid
+flowchart TD
+    A["main()"] --> B["process_file(path)"]
+
+    subgraph S1["A. Identify the workbook"]
+        C1["1. filename_to_financial_year()"]
+        C2["2. filename_to_trust_type()"]
+        C3["3. sha256_file()"]
+        C1 --> C2 --> C3
+    end
+
+    subgraph S2["B. Register the workbook"]
+        D1["4. record_import_batch('STARTED')"]
+    end
+
+    subgraph S3["C. Clean and transform in memory"]
+        E1["5. read_provider_list()"]
+        E2["6. read_all_data()"]
+        E1 --> E2
+    end
+
+    subgraph S4["D. Quality gate"]
+        F1["7. source_validation_counts()"]
+        F2["8. validate()"]
+        F3{"Validation passed?"}
+        F4["9. record_import_batch('VALIDATED')"]
+        F1 --> F2 --> F3
+        F3 -->|Yes| F4
+    end
+
+    subgraph S5["E. Database writes"]
+        G1["10. load_staging()"]
+        G2["11. populate_dim_trust()"]
+        G3["12. promote_to_fact()"]
+        G4["13. record_import_batch('LOADED')"]
+        G1 --> G2 --> G3 --> G4
+    end
+
+    B --> C1
+    C3 --> D1
+    D1 --> E1
+    E2 --> F1
+    F4 --> G1
+
+    F3 -->|No| X["record_import_batch('FAILED')"]
+    E2 -. "read error" .-> X
+    G3 -. "error after the gate<br/>(steps 10–11 already committed)" .-> X
+    X --> Y["Raise exception and stop the run"]
+
+    D1 --> AUD["nhs_bronze.import_batch"]
+    F4 --> AUD
+    G4 --> AUD
+    X --> AUD
+
+    G1 --> BR["nhs_bronze.stg_provider_list<br/>nhs_bronze.stg_tac_raw"]
+    G2 --> SI["nhs_silver.dim_trust"]
+    G3 --> SF["nhs_silver.dim_worksheet<br/>nhs_silver.fct_tac"]
+
+    classDef bronze fill:#F8EFE4,stroke:#D4A373,color:#14253D
+    classDef silver fill:#EDF1F6,stroke:#9AAEC4,color:#14253D
+    classDef failure fill:#FDF1F1,stroke:#B33A3A,color:#B33A3A
+    classDef success fill:#EAF3EC,stroke:#8FBF9A,color:#14253D
+    class AUD,BR bronze
+    class SI,SF silver
+    class X,Y failure
+    class G4 success
+```
 
 The sections below go through steps 4 to 10 in detail.
 
