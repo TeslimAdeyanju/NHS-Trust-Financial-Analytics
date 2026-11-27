@@ -66,11 +66,11 @@ already has the tables, at the cost of the data in them.
 
 Each Bronze table has one job:
 
-| Table | One row per | Written by | Purpose |
-|-------|-------------|------------|---------|
-| `import_batch` | Source file (by name and fingerprint) | `record_import_batch()` | The audit log: which file was loaded, when, its row counts and gate results, and whether it succeeded |
-| `stg_provider_list` | Trust in a workbook's "List of Providers" sheet | `load_staging()` | The lookup that turns a trust name into its ODS code |
-| `stg_tac_raw` | Line in a workbook's "All data" sheet | `load_staging()` | The near-verbatim copy of every published figure, current and prior year |
+| Table | One row per | Written by (Python file → function) | Purpose |
+|-------|-------------|-------------------------------------|---------|
+| `import_batch` | Source file (by name and fingerprint) | [`load_tac_data.py`](../../python/ingestion/load_tac_data.py) → `record_import_batch()` | The audit log: which file was loaded, when, its row counts and gate results, and whether it succeeded |
+| `stg_provider_list` | Trust in a workbook's "List of Providers" sheet | [`load_tac_data.py`](../../python/ingestion/load_tac_data.py) → `load_staging()` | The lookup that turns a trust name into its ODS code |
+| `stg_tac_raw` | Line in a workbook's "All data" sheet | [`load_tac_data.py`](../../python/ingestion/load_tac_data.py) → `load_staging()` | The near-verbatim copy of every published figure, current and prior year |
 
 **`import_batch`**, the audit log:
 
