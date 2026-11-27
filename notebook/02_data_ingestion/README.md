@@ -33,10 +33,15 @@ SubCode and its description, not real trust data. The pipeline explicitly skips 
 
 ```python
 # python/ingestion/load_tac_data.py
-files = sorted(
-    p for p in RAW_DIR.glob("TAC_NHS_*.xlsx")
-    if "illustrative" not in p.name.lower()
-)
+def find_tac_files(raw_dir: Path) -> list[Path]:
+    return sorted(
+        (
+            p for p in raw_dir.glob("*.xlsx")
+            if p.name.lower().startswith("tac_nhs_")
+            and "illustrative" not in p.name.lower()
+        ),
+        key=lambda p: p.name.lower(),
+    )
 ```
 
 ---
@@ -146,11 +151,11 @@ rather than special-casing "the old files" by hand.
 Two critical facts live only in the filename, not inside the workbook:
 
 ```python
-YEAR_RE = re.compile(r"(\d{4})-(\d{2})")
+YEAR_RE = re.compile(r"(\d{4})[-_](\d{2})")   # 2023-24 or 2023_24
 
 def filename_to_financial_year(filename: str) -> str:
     match = YEAR_RE.search(filename)
-    return f"{match.group(1)}/{match.group(2)}"   # "2023-24" → "2023/24"
+    return f"{match.group(1)}/{match.group(2)}"   # "2023_24" → "2023/24"
 
 def filename_to_trust_type(filename: str) -> str:
     return "FOUNDATION_TRUST" if "foundation" in filename.lower() else "NHS_TRUST"
