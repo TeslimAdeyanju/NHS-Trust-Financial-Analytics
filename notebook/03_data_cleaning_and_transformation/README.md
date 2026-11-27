@@ -202,114 +202,94 @@ by name, and passes each one to `process_file()`. For each file, these functions
 **✕ On any error in steps 5–12:** `record_import_batch("FAILED", error)` saves the reason to
 `nhs_bronze.import_batch`, the error is re-raised, and `main()` stops the whole run.
 
-Two points about this order:
-
-- **`source_validation_counts()` runs before `validate()`, not inside it.** `process_file()` calls it first
-  so the same counts can go both to the gate and into `import_batch`. `validate()` only decides pass or fail
-  from them.
-- **Steps 1–3 and 5–8 never touch the database.** A file that fails the gate changes nothing except its
-  `FAILED` row in `import_batch`. A failure *after* the gate is different: steps 10 and 11 each commit their
-  own transaction, so if step 12 fails, the new Bronze rows and `dim_trust` updates stay, while `fct_tac`
-  rolls back to its previous state.
+**Steps 1–3 and 5–8 never touch the database.** A file that fails the gate changes nothing except its
+`FAILED` row in `import_batch`. A failure *after* the gate is different: steps 10 and 11 each commit their
+own transaction, so if step 12 fails, the new Bronze rows and `dim_trust` updates stay, while `fct_tac`
+rolls back to its previous state.
 
 ```mermaid
+%%{init: {"flowchart": {"nodeSpacing": 25, "rankSpacing": 35, "curve": "basis"}, "themeVariables": {"fontSize": "14px"}}}%%
 flowchart TD
-    A["main()"] --> B["process_file(path)"]
+    START(["main() → process_file(path)"])
 
-    subgraph S1["A. Identify the workbook"]
-        C1["1. filename_to_financial_year()"]
-        C2["2. filename_to_trust_type()"]
-        C3["3. sha256_file()"]
-        C1 --> C2 --> C3
+    subgraph A["A. Work out what the file is"]
+        direction TB
+        A1["1 · filename_to_financial_year()"] --> A2["2 · filename_to_trust_type()"] --> A3["3 · sha256_file()"]
     end
 
-    subgraph S2["B. Register the workbook"]
-        D1["4. record_import_batch('STARTED')"]
+    subgraph B["B. Log the file"]
+        B4["4 · record_import_batch('STARTED')"]
     end
 
-    subgraph S3["C. Clean and transform in memory"]
-        E1["5. read_provider_list()"]
-        E2["6. read_all_data()"]
-        E1 --> E2
+    subgraph C["C. Clean and transform (in memory)"]
+        direction TB
+        C5["5 · read_provider_list()"] --> C6["6 · read_all_data()"]
     end
 
-    subgraph S4["D. Quality gate"]
-        F1["7. source_validation_counts()"]
-        F2["8. validate()"]
-        F3{"Validation passed?"}
-        F4["9. record_import_batch('VALIDATED')"]
-        F1 --> F2 --> F3
-        F3 -->|Yes| F4
+    subgraph D["D. Quality gate (in memory)"]
+        direction TB
+        D7["7 · source_validation_counts()"] --> D8{"8 · validate()<br/>passed?"}
+        D8 -->|yes| D9["9 · record_import_batch('VALIDATED')"]
     end
 
-    subgraph S5["E. Database writes"]
-        G1["10. load_staging()"]
-        G2["11. populate_dim_trust()"]
-        G3["12. promote_to_fact()"]
-        G4["13. record_import_batch('LOADED')"]
-        G1 --> G2 --> G3 --> G4
+    subgraph E["E. Write"]
+        direction TB
+        E10["10 · load_staging()"] --> E11["11 · populate_dim_trust()"] --> E12["12 · promote_to_fact()"] --> E13["13 · record_import_batch('LOADED')"]
     end
 
-    B --> C1
-    C3 --> D1
-    D1 --> E1
-    E2 --> F1
-    F4 --> G1
+    subgraph DB["MySQL"]
+        direction TB
+        AUD[("nhs_bronze.import_batch")]
+        BR[("nhs_bronze<br/>stg_provider_list · stg_tac_raw")]
+        SV[("nhs_silver<br/>dim_trust · dim_worksheet · fct_tac")]
+    end
 
-    F3 -->|No| X["record_import_batch('FAILED')"]
-    E2 -. "read error" .-> X
-    G3 -. "error after the gate<br/>(steps 10–11 already committed)" .-> X
-    X --> Y["Raise exception and stop the run"]
+    FAIL["✕ record_import_batch('FAILED')<br/>raise error, stop the run"]
 
-    D1 --> AUD["nhs_bronze.import_batch"]
-    F4 --> AUD
-    G4 --> AUD
-    X --> AUD
+    START --> A1
+    A3 --> B4 --> C5
+    C6 --> D7
+    D9 --> E10
 
-    G1 --> BR["nhs_bronze.stg_provider_list<br/>nhs_bronze.stg_tac_raw"]
-    G2 --> SI["nhs_silver.dim_trust"]
-    G3 --> SF["nhs_silver.dim_worksheet<br/>nhs_silver.fct_tac"]
+    D8 -->|no| FAIL
+    C6 -. read error .-> FAIL
+    E12 -. "error after the gate<br/>(steps 10–11 already committed)" .-> FAIL
+
+    B4 & D9 & E13 & FAIL --> AUD
+    E10 --> BR
+    E11 & E12 --> SV
 
     classDef bronze fill:#F8EFE4,stroke:#D4A373,color:#14253D
     classDef silver fill:#EDF1F6,stroke:#9AAEC4,color:#14253D
     classDef failure fill:#FDF1F1,stroke:#B33A3A,color:#B33A3A
     classDef success fill:#EAF3EC,stroke:#8FBF9A,color:#14253D
     class AUD,BR bronze
-    class SI,SF silver
-    class X,Y failure
-    class G4 success
+    class SV silver
+    class FAIL failure
+    class E13 success
 ```
 
-The sections below go through steps 4 to 10 in detail.
 
 ---
 
 ## How It Works in the Code
 
-Every function below is in [`python/ingestion/load_tac_data.py`](../../python/ingestion/load_tac_data.py)
-or its helper module [`source_integrity.py`](../../python/ingestion/source_integrity.py). For each of the
-six workbooks, `process_file()` runs the same six steps:
+The table above lists every step. This section shows the code behind steps 4 to 10, which take a workbook
+from disk into Bronze. Steps 11 and 12 move it on into Silver and are covered in
+[stage ④](../04_data_modelling_and_analytics/README.md#how-python-fills-silver-once-per-workbook).
 
-![How load_tac_data.py processes each workbook: main() calls process_file() for every TAC_NHS_*.xlsx file; 01 record_import_batch() logs the file and its SHA-256 in nhs_bronze.import_batch; 02 read_provider_list() and read_all_data() read and standardise both sheets using source_integrity.py; 03 validate() checks the data, and any failure records FAILED and stops; 04 load_staging() replaces the file's slice of nhs_bronze; 05 populate_dim_trust() and promote_to_fact() load nhs_silver; 06 record_import_batch() records LOADED.](../../docs/images/load_tac_data_workflow.png)
-
-**Steps 01–04 are this stage**: they take a workbook from disk into Bronze. Step 05, which moves the data on
-into Silver, is covered in [stage ④](../04_data_modelling_and_analytics/README.md).
-
-### Step 01 — Log the file before reading it
+### Step 4 — Log the file before reading it
 
 `record_import_batch("STARTED")` writes the file name, size, financial year, trust type and a SHA-256
 fingerprint of the file's exact bytes to `nhs_bronze.import_batch`. The same row is updated as the file
-moves through the steps (`VALIDATED`, then `LOADED`), or marked `FAILED` with the error message. The
-fingerprint is also stamped on every row the file produces, so any figure can be tied to the exact version
-of the workbook it came from.
+moves through the steps (`VALIDATED` at step 9, `LOADED` at step 13), or marked `FAILED` with the error
+message. The fingerprint from step 3 is also stamped on every row the file produces, so any figure can be
+tied to the exact version of the workbook it came from.
 
-The illustrative workbook (`TAC_illustrative_2023-24.xlsx`) holds SubCode labels, not trust data, so the
-loader skips it.
-
-### Step 02 — Read and standardise both sheets
+### Steps 5–6 — Read and standardise both sheets
 
 Each workbook is read entirely in memory. Apart from the audit log entry, nothing is written to the
-database until step 04.
+database until step 10.
 
 **The provider list** (`read_provider_list()`) is the lookup that turns trust names into ODS codes. Its
 columns are renamed to the warehouse's names, rows without a name or code are dropped, text is trimmed,
@@ -443,9 +423,11 @@ def normalise_provider_name(value: str) -> str:
 | `King’s College Hospital NHS Foundation Trust` | `king s college hospital nhs foundation trust` |
 | `South Warwickshire University NHS Foundation Trust` | `south warwickshire nhs foundation trust` (via the alias list) |
 
-### Step 03 — The quality gate: `validate()`
+### Steps 7–9 — The quality gate
 
-The gate runs on the in-memory data, before anything is written:
+The gate is two functions. `source_validation_counts()` (step 7) counts each kind of problem, and
+`validate()` (step 8) stops the load if any count is above zero. They are separate so the same counts can
+go both to the gate and into `import_batch`. Both run on the in-memory data, before anything is written:
 
 | Check | Why it stops the load |
 |-------|--------|
@@ -460,7 +442,7 @@ Every check is critical. If any fails, the whole file is rejected, nothing is wr
 records `FAILED` with the reason. If all pass, `import_batch` records `VALIDATED` along with the row counts
 the gate calculated.
 
-### Step 04 — Write to Bronze: `load_staging()`
+### Step 10 — Write to Bronze: `load_staging()`
 
 The validated data replaces this file's slice of Bronze, inside one transaction:
 
