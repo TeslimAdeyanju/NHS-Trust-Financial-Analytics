@@ -62,10 +62,10 @@ Explore the six stages and their implementation notes:
 
 - **[Data Sourcing](notebook/01_data_sourcing/README.md):** Obtain NHS England TAC workbooks and establish source controls.
 - **[Data Ingestion](notebook/02_data_ingestion/README.md):** Find the TAC workbooks and read their two sheets: the shape of the data before any cleaning.
-- **[Data Cleaning & Transformation](notebook/03_data_cleaning_and_transformation/README.md):** Standardise and validate the records, then land them in the Bronze layer.
-- **[Data Modelling & Analytics](notebook/04_data_modelling_and_analytics/README.md):** Build SQL dimensions, facts and financial KPIs in Silver and Gold.
+- **[Data Cleaning &amp; Transformation](notebook/03_data_cleaning_and_transformation/README.md):** Standardise and validate the records, then land them in the Bronze layer.
+- **[Data Modelling &amp; Analytics](notebook/04_data_modelling_and_analytics/README.md):** Build SQL dimensions, facts and financial KPIs in Silver and Gold.
 - **[Data Preparation for Reporting](notebook/05_data_preparation_for_reporting/README.md):** Create curated datasets and reporting exports.
-- **[Data Visualisation & Insights](notebook/06_data_visualisation_and_insights/README.md):** Develop Power BI reporting and financial insights; dashboard publication is pending.
+- **[Data Visualisation &amp; Insights](notebook/06_data_visualisation_and_insights/README.md):** Develop Power BI reporting and financial insights; dashboard publication is pending.
 
 Alongside the stages, the **[SQL Guide](notebook/sql_database_guide/README.md)** explains how the MySQL schema script builds the Bronze, Silver and Gold databases, and how the Gold views work.
 
@@ -73,15 +73,15 @@ The implementation uses MySQL Bronze, Silver and Gold layers. Detailed schemas, 
 
 ## Documentation and reproducibility
 
-| Resource | Contents |
-| --- | --- |
-| [Project Documentation](project_documentation.md) | Business case, source data, methodology, architecture and implementation |
-| [2023/24 Financial Review](reports/nhs_sector_financial_review_2324.md) | Detailed findings and financial interpretation |
-| [SQL Guide](notebook/sql_database_guide/README.md) | How the MySQL schema builds Bronze, Silver and Gold, and how the views work |
-| [Power BI Setup Guide](power_bi/setup_guide.md) | Relationships and proposed report pages |
-| [DAX Measures](power_bi/dax_measures.md) | Financial reporting calculations |
-| [KPI Definitions](sql/views/v_kpis.sql) | The four implemented KPIs, their formulas and RAG bands (header comment) |
-| [Development Notes](notebook/) | Stage-by-stage implementation history |
+| Resource                                                               | Contents                                                                    |
+| ---------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| [Project Documentation](project_documentation.md)                       | Business case, source data, methodology, architecture and implementation    |
+| [2023/24 Financial Review](reports/nhs_sector_financial_review_2324.md) | Detailed findings and financial interpretation                              |
+| [SQL Guide](notebook/sql_database_guide/README.md)                      | How the MySQL schema builds Bronze, Silver and Gold, and how the views work |
+| [Power BI Setup Guide](power_bi/setup_guide.md)                         | Relationships and proposed report pages                                     |
+| [DAX Measures](power_bi/dax_measures.md)                                | Financial reporting calculations                                            |
+| [KPI Definitions](sql/views/v_kpis.sql)                                 | The four implemented KPIs, their formulas and RAG bands (header comment)    |
+| [Development Notes](notebook/)                                          | Stage-by-stage implementation history                                       |
 
 **Source:** [NHS England Trust Accounts Consolidation publications](https://www.england.nhs.uk/financial-accounting-reporting-systems/nhs-england-finance-returns-publications-guidance/trust-accounts-consolidation-tac/).
 
