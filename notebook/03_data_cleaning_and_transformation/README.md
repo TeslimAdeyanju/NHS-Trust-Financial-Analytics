@@ -157,27 +157,46 @@ left half-updated.
 
 ### The full flow for one workbook
 
-`main()` finds every `TAC_NHS_*.xlsx` file in `data/raw/`, sorts them by name, and passes each one to
-`process_file()`. For each file, this is what Python does and what it sends to MySQL:
+`main()` finds every `TAC_NHS_*.xlsx` file in `data/raw/` (skipping the illustrative workbook), sorts them
+by name, and passes each one to `process_file()`. For each file, these functions run in this order.
+Functions marked **[SI]** are in [`source_integrity.py`](../../python/ingestion/source_integrity.py); the
+rest are in [`load_tac_data.py`](../../python/ingestion/load_tac_data.py).
 
-| # | Python function | Runs in | SQL sent to MySQL | Table affected | Result |
-|---|-----------------|---------|-------------------|----------------|--------|
-| 1 | `process_file()` works out the year, type and SHA-256 from the file | Python only | — | — | e.g. `2021/22`, `FOUNDATION_TRUST`, `e70b6db7…` |
-| 2 | `record_import_batch("STARTED")` | `nhs_bronze` | `INSERT ... ON DUPLICATE KEY UPDATE` | `import_batch` | The file is logged before it is read |
-| 3 | `read_provider_list()` and `read_all_data()` | Python only (pandas) | — | — | Two cleaned DataFrames held in memory |
-| 4 | `source_validation_counts()` and `validate()` | Python only | — | — | Pass, or an error that jumps to step 9 |
-| 5 | `record_import_batch("VALIDATED")` | `nhs_bronze` | `INSERT ... ON DUPLICATE KEY UPDATE` | `import_batch` | Status and the gate's counts saved |
-| 6 | `load_staging()` | `nhs_bronze` | `DELETE ... WHERE financial_year = ? AND trust_type = ?`, then `INSERT` in batches | `stg_provider_list`, `stg_tac_raw` | This file's slice of Bronze replaced |
-| 7 | `populate_dim_trust()` and `promote_to_fact()` | `nhs_bronze` → `nhs_silver` | The next stage: [stage ④](../04_data_modelling_and_analytics/README.md#how-python-fills-silver-once-per-workbook) | `dim_worksheet`, `dim_trust`, `fct_tac` | This file's slice of Silver replaced |
-| 8 | `record_import_batch("LOADED")` | `nhs_bronze` | `INSERT ... ON DUPLICATE KEY UPDATE` | `import_batch` | `completed_ts` set; the file is done |
-| 9 | *On any error:* `record_import_batch("FAILED", error)` | `nhs_bronze` | `INSERT ... ON DUPLICATE KEY UPDATE` | `import_batch` | Reason saved, then the run stops |
+| # | Python function | Helpers it calls | Runs in | SQL sent to MySQL | Table affected | Result |
+|---|-----------------|------------------|---------|-------------------|----------------|--------|
+| | ***A. Work out what the file is*** | | | | | |
+| 1 | `filename_to_financial_year()` | — | Python only | — | — | `…_2021-22.xlsx` → `2021/22` |
+| 2 | `filename_to_trust_type()` | — | Python only | — | — | `foundation` in the name → `FOUNDATION_TRUST`, otherwise `NHS_TRUST` |
+| 3 | `sha256_file()` **[SI]** | — | Python only | — | — | The file's fingerprint, e.g. `e70b6db7…` |
+| | ***B. Log the file*** | | | | | |
+| 4 | `record_import_batch("STARTED")` | `get_engine("nhs_bronze")` | `nhs_bronze` | `INSERT ... ON DUPLICATE KEY UPDATE` | `import_batch` | The file is logged before it is read |
+| | ***C. Clean and transform (in memory)*** | | | | | |
+| 5 | `read_provider_list()` | `provider_name_key()` **[SI]** → `normalise_provider_name()` **[SI]** | Python only (pandas) | — | — | Provider list renamed, trimmed, name key added, only 3-character ODS codes kept |
+| 6 | `read_all_data()` | `find_sheet_name()`, `infer_year_type()`, `provider_name_key()` **[SI]** | Python only (pandas) | — | — | "All data" renamed, unidentifiable rows dropped, CY/PY tagged, amounts converted to 5 dp, name key and source columns added |
+| | ***D. Quality gate (in memory)*** | | | | | |
+| 7 | `source_validation_counts()` **[SI]** | — | Python only | — | — | Counts of duplicates, fact-key collisions, ambiguous and unmatched names |
+| 8 | `validate()` | — | Python only | — | — | Pass, or an error that jumps to the failure row |
+| 9 | `record_import_batch("VALIDATED")` | `get_engine("nhs_bronze")` | `nhs_bronze` | `INSERT ... ON DUPLICATE KEY UPDATE` | `import_batch` | Status and the gate's counts saved |
+| | ***E. Write*** | | | | | |
+| 10 | `load_staging()` | `get_engine("nhs_bronze")` | `nhs_bronze` | `DELETE ... WHERE financial_year = ? AND trust_type = ?`, then `INSERT` in batches | `stg_provider_list`, `stg_tac_raw` | This file's slice of Bronze replaced |
+| 11 | `populate_dim_trust()` | `get_engine()` for both databases | `nhs_bronze` → `nhs_silver` | Upsert: see the next stage, [stage ④](../04_data_modelling_and_analytics/README.md#how-python-fills-silver-once-per-workbook) | `dim_trust` | New trusts added, existing ones updated |
+| 12 | `promote_to_fact()` | `get_engine()` for both databases | `nhs_bronze` → `nhs_silver` | `INSERT IGNORE`, then `DELETE` + `INSERT` in one transaction: see [stage ④](../04_data_modelling_and_analytics/README.md#how-python-fills-silver-once-per-workbook) | `dim_worksheet`, `fct_tac` | This file's slice of the fact table replaced |
+| 13 | `record_import_batch("LOADED")` | `get_engine("nhs_bronze")` | `nhs_bronze` | `INSERT ... ON DUPLICATE KEY UPDATE` | `import_batch` | `completed_ts` set; the file is done |
+| ✕ | *On any error in steps 5–12:* `record_import_batch("FAILED", error)` | `get_engine("nhs_bronze")` | `nhs_bronze` | `INSERT ... ON DUPLICATE KEY UPDATE` | `import_batch` | Reason saved; the error is re-raised and `main()` stops the whole run |
 
-Steps 3 and 4 never touch the database. A file that fails the gate leaves Bronze and Silver exactly as they
-were, and the only trace is its `FAILED` row in `import_batch`.
+Two points about this order:
+
+- **`source_validation_counts()` runs before `validate()`, not inside it.** `process_file()` calls it first
+  so the same counts can go both to the gate and into `import_batch`. `validate()` only decides pass or fail
+  from them.
+- **Steps 1–3 and 5–8 never touch the database.** A file that fails the gate changes nothing except its
+  `FAILED` row in `import_batch`. A failure *after* the gate is different: steps 10 and 11 each commit their
+  own transaction, so if step 12 fails, the new Bronze rows and `dim_trust` updates stay, while `fct_tac`
+  rolls back to its previous state.
 
 ![One workbook, Python to MySQL: load_tac_data.py logs import_batch STARTED in nhs_bronze, reads the "List of Providers" and "All data" sheets from the Excel workbook, standardises them, tags CY/PY, builds the name key and runs the validate() quality gate. If a check fails, import_batch records FAILED with the reason and no staging or Silver rows are written. If all checks pass, import_batch records VALIDATED with counts, the file's slice of stg_provider_list and stg_tac_raw is deleted and reinserted, populate_dim_trust() and promote_to_fact() write dim_trust, dim_worksheet and fct_tac in nhs_silver, and import_batch records LOADED.](../../docs/images/stage3_workbook_load_flow.png)
 
-The sections below go through steps 2 to 6 in detail.
+The sections below go through steps 4 to 10 in detail.
 
 ---
 
