@@ -61,8 +61,8 @@ The diagram connects the six methodological stages to NHS England TAC source dat
 Explore the six stages and their implementation notes:
 
 - **[Data Sourcing](notebook/01_data_sourcing/README.md):** Obtain NHS England TAC workbooks and establish source controls.
-- **[Data Ingestion](notebook/02_data_ingestion/README.md):** Load raw financial records into the Bronze layer.
-- **[Data Cleaning & Transformation](notebook/03_data_cleaning_and_transformation/README.md):** Validate and standardise financial records in Silver.
+- **[Data Ingestion](notebook/02_data_ingestion/README.md):** Find the TAC workbooks and read their two sheets: the shape of the data before any cleaning.
+- **[Data Cleaning & Transformation](notebook/03_data_cleaning_and_transformation/README.md):** Standardise and validate the records, then land them in the Bronze layer.
 - **[Data Modelling & Analytics](notebook/04_data_modelling_and_analytics/README.md):** Build SQL dimensions, facts and financial KPIs in Silver and Gold.
 - **[Data Preparation for Reporting](notebook/05_data_preparation_for_reporting/README.md):** Create curated datasets and reporting exports.
 - **[Data Visualisation & Insights](notebook/06_data_visualisation_and_insights/README.md):** Develop Power BI reporting and financial insights; dashboard publication is pending.
@@ -77,6 +77,7 @@ The implementation uses MySQL Bronze, Silver and Gold layers. Detailed schemas, 
 | --- | --- |
 | [Project Documentation](project_documentation.md) | Business case, source data, methodology, architecture and implementation |
 | [2023/24 Financial Review](reports/nhs_sector_financial_review_2324.md) | Detailed findings and financial interpretation |
+| [SQL Guide](notebook/sql_database_guide/README.md) | How the MySQL schema builds Bronze, Silver and Gold, and how the views work |
 | [Power BI Setup Guide](power_bi/setup_guide.md) | Relationships and proposed report pages |
 | [DAX Measures](power_bi/dax_measures.md) | Financial reporting calculations |
 | [NHS KPI Definitions](agent_docs/kpi_definitions.md) | Definitions and reporting conventions |
@@ -84,7 +85,7 @@ The implementation uses MySQL Bronze, Silver and Gold layers. Detailed schemas, 
 
 **Source:** [NHS England Trust Accounts Consolidation publications](https://www.england.nhs.uk/financial-accounting-reporting-systems/nhs-england-finance-returns-publications-guidance/trust-accounts-consolidation-tac/).
 
-To reproduce the pipeline, obtain the corresponding annual TAC workbooks, configure Python 3.11+ and MySQL 8+, and follow the documented ingestion, validation and export steps in [Project Documentation](project_documentation.md). The underlying source workbooks and generated exports are not committed to this repository.
+To reproduce the pipeline, obtain the corresponding annual TAC workbooks, configure Python 3.11+ and MySQL 8+, and follow the documented ingestion, validation and export steps in [Project Documentation](project_documentation.md). Save the workbooks in `data/raw/` named like `tac_nhs_trusts_2023_24.xlsx` and `tac_nhs_foundation_trusts_2023_24.xlsx` (NHS England's `TAC_NHS_trusts_2023-24.xlsx` style also works): the loader reads the financial year and trust type from the file name. Run `python -m unittest discover -s tests -v` for the regression tests, which need no database. The underlying source workbooks and generated exports are not committed to this repository.
 
 ## Author
 
