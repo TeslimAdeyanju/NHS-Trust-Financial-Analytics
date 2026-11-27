@@ -14,7 +14,7 @@ markmap:
 
 ---
 
-## What This Stage Does
+## 3.1 What This Stage Does
 
 The workbooks from [stage ②](../02_data_ingestion/README.md) are accurate, but they aren't ready to analyse.
 Column names change between years. Every figure appears twice, once for the current year and once as the
@@ -25,7 +25,7 @@ This stage solves those problems once, in one place, so that every number used l
 been checked on the way in. It also does something just as important: it **refuses to load a file it can't
 trust**, rather than loading most of it and hoping for the best.
 
-## Three Layers, One Direction
+## 3.2 Three Layers, One Direction
 
 I split the warehouse into three MySQL databases, each with one job. Data only ever moves forward:
 
@@ -44,7 +44,7 @@ different question:
 Keeping those questions apart means a problem in one layer can be found and fixed without disturbing the
 others.
 
-## Why I Keep a Raw Copy Before Cleaning
+## 3.3 Why I Keep a Raw Copy Before Cleaning
 
 The simplest design would clean the data in Python and write it straight into the final tables. I decided
 against that, and the Bronze layer is the reason. It costs some disk space, and it gives me three things I
@@ -66,7 +66,7 @@ as zero, would quietly change the analysis.
 trust. If NHS England corrects a file, I reload just that file. Its slice is replaced in a single step, the
 other five files are never touched, and if the reload fails the previous version stays in place.
 
-## The Problems I Had to Solve
+## 3.4 The Problems I Had to Solve
 
 **Column names changed between years.** NHS England renamed two columns after 2021/22. A small rename map
 reads both versions the same way, so the pipeline doesn't need a special case for "the old files".
@@ -85,7 +85,7 @@ silently attach one trust's finances to another, and that kind of error is very 
 **Some amounts have decimals.** TAC reports in thousands of pounds, but some values carry up to five
 decimal places. I store them at full precision rather than rounding to whole thousands.
 
-## A Gate, Not a Warning
+## 3.5 A Gate, Not a Warning
 
 Before anything is written, each file passes through a quality gate. It checks for rows that can't be
 identified, duplicated rows, two source lines that would collide in the final table, and any trust name that
@@ -98,7 +98,7 @@ fingerprint and row counts, so there is an audit trail for every load, successfu
 
 ---
 
-## How Python and SQL Work Together
+## 3.6 How Python and SQL Work Together
 
 The pipeline has two separate halves:
 
@@ -110,7 +110,7 @@ The pipeline has two separate halves:
 - **How the SQL side works** (the build command, every table definition and the Gold views) is explained in
   the **[SQL Guide](../sql_database_guide/README.md)**.
 
-### The tables this stage writes to
+### 3.6.1 The tables this stage writes to
 
 This stage writes only to `nhs_bronze`, into the three tables the schema script created there:
 
@@ -120,7 +120,7 @@ This stage writes only to `nhs_bronze`, into the three tables the schema script 
 | `stg_provider_list` | Trust in a workbook's "List of Providers" sheet | [`load_tac_data.py`](../../python/ingestion/load_tac_data.py) → `load_staging()` | The lookup that turns a trust name into its ODS code |
 | `stg_tac_raw` | Line in a workbook's "All data" sheet | [`load_tac_data.py`](../../python/ingestion/load_tac_data.py) → `load_staging()` | The near-verbatim copy of every published figure, current and prior year |
 
-The full `CREATE TABLE` for each is in the [SQL Guide, Bronze](../sql_database_guide/README.md#bronze-the-landing-tables).
+The full `CREATE TABLE` for each is in the [SQL Guide, Bronze](../sql_database_guide/README.md#40-bronze-the-landing-tables).
 Two things connect the Python code to those definitions:
 
 - **The Python column names are the SQL column names.** `read_all_data()` renames the Excel headers to
@@ -130,7 +130,7 @@ Two things connect the Python code to those definitions:
   they identify which of the six workbooks a row came from, so every `DELETE` the loader runs is filtered
   on them and a reload only ever touches its own file's rows.
 
-### How Python connects to MySQL
+### 3.6.2 How Python connects to MySQL
 
 Python talks to MySQL through **SQLAlchemy** (a Python database toolkit), using the **PyMySQL** driver.
 `get_engine()` builds the connection from environment variables, so no password is written in the code:
@@ -161,7 +161,7 @@ write runs inside `with engine.begin() as conn:`, which opens a **transaction**.
 block succeeds, it is committed. If any one fails, all of them are rolled back, so the database is never
 left half-updated.
 
-### The full flow for one workbook
+### 3.6.3 The full flow for one workbook
 
 `main()` finds every `tac_nhs_*.xlsx` file in `data/raw/` with `find_tac_files()` (skipping the illustrative workbook), sorts them
 by name, and passes each one to `process_file()`. For each file, these functions run in this order. The
@@ -201,8 +201,8 @@ by name, and passes each one to `process_file()`. For each file, these functions
 | # | Function | Source | What it does | Writes to MySQL |
 |---|----------|--------|--------------|-----------------|
 | 10 | `load_staging()` | [`load_tac_data.py`](../../python/ingestion/load_tac_data.py) | Deletes this file's year/type slice, then inserts in batches | `nhs_bronze.stg_provider_list`, `nhs_bronze.stg_tac_raw` |
-| 11 | `populate_dim_trust()` | [`load_tac_data.py`](../../python/ingestion/load_tac_data.py) | Adds new trusts, updates existing ones ([stage ④](../04_data_modelling_and_analytics/README.md#how-python-fills-silver-once-per-workbook)) | `nhs_silver.dim_trust` |
-| 12 | `promote_to_fact()` | [`load_tac_data.py`](../../python/ingestion/load_tac_data.py) | Adds missing schedules, then replaces this file's facts in one transaction ([stage ④](../04_data_modelling_and_analytics/README.md#how-python-fills-silver-once-per-workbook)) | `nhs_silver.dim_worksheet`, `nhs_silver.fct_tac` |
+| 11 | `populate_dim_trust()` | [`load_tac_data.py`](../../python/ingestion/load_tac_data.py) | Adds new trusts, updates existing ones ([stage ④](../04_data_modelling_and_analytics/README.md#42-how-python-fills-silver-once-per-workbook)) | `nhs_silver.dim_trust` |
+| 12 | `promote_to_fact()` | [`load_tac_data.py`](../../python/ingestion/load_tac_data.py) | Adds missing schedules, then replaces this file's facts in one transaction ([stage ④](../04_data_modelling_and_analytics/README.md#42-how-python-fills-silver-once-per-workbook)) | `nhs_silver.dim_worksheet`, `nhs_silver.fct_tac` |
 | 13 | `record_import_batch("LOADED")` | [`load_tac_data.py`](../../python/ingestion/load_tac_data.py) | Sets `completed_ts`; the file is done | `nhs_bronze.import_batch` (upsert) |
 
 **✕ On any error in steps 5–12:** `record_import_batch("FAILED", error)` saves the reason to
@@ -278,13 +278,13 @@ flowchart TD
 
 ---
 
-## How It Works in the Code
+## 3.7 How It Works in the Code
 
 The table above lists every step. This section shows the code behind steps 4 to 10, which take a workbook
 from disk into Bronze. Steps 11 and 12 move it on into Silver and are covered in
-[stage ④](../04_data_modelling_and_analytics/README.md#how-python-fills-silver-once-per-workbook).
+[stage ④](../04_data_modelling_and_analytics/README.md#42-how-python-fills-silver-once-per-workbook).
 
-### Step 4 — Log the file before reading it
+### 3.7.1 Step 4 — Log the file before reading it
 
 `record_import_batch("STARTED")` writes the file name, size, financial year, trust type and a SHA-256
 fingerprint of the file's exact bytes to `nhs_bronze.import_batch`. The same row is updated as the file
@@ -292,7 +292,7 @@ moves through the steps (`VALIDATED` at step 9, `LOADED` at step 13), or marked 
 message. The fingerprint from step 3 is also stamped on every row the file produces, so any figure can be
 tied to the exact version of the workbook it came from.
 
-### Steps 5–6 — Read and standardise both sheets
+### 3.7.2 Steps 5–6 — Read and standardise both sheets
 
 Each workbook is read entirely in memory. Apart from the audit log entry, nothing is written to the
 database until step 10.
@@ -429,7 +429,7 @@ def normalise_provider_name(value: str) -> str:
 | `King’s College Hospital NHS Foundation Trust` | `king s college hospital nhs foundation trust` |
 | `South Warwickshire University NHS Foundation Trust` | `south warwickshire nhs foundation trust` (via the alias list) |
 
-### Steps 7–9 — The quality gate
+### 3.7.3 Steps 7–9 — The quality gate
 
 The gate is two functions. `source_validation_counts()` (step 7) counts each kind of problem, and
 `validate()` (step 8) stops the load if any count is above zero. They are separate so the same counts can
@@ -448,7 +448,7 @@ Every check is critical. If any fails, the whole file is rejected, nothing is wr
 records `FAILED` with the reason. If all pass, `import_batch` records `VALIDATED` along with the row counts
 the gate calculated.
 
-### Step 10 — Write to Bronze: `load_staging()`
+### 3.7.4 Step 10 — Write to Bronze: `load_staging()`
 
 The validated data replaces this file's slice of Bronze, inside one transaction:
 
@@ -484,7 +484,7 @@ other five. Because both tables are in one transaction, a failed reload leaves t
 place. `chunksize=2000` sends the rows in batches, because a single insert of up to a million rows would
 exceed MySQL's maximum packet size.
 
-## The Output: Before and After
+## 3.8 The Output: Before and After
 
 This is one real figure going through the stage: Airedale NHS Foundation Trust's patient care income in
 the 2021/22 Foundation Trusts workbook.
@@ -509,11 +509,11 @@ code (`RCF`, from the provider list), and exactly which file it came from. In st
 moves on to Silver.
 
 The full `stg_tac_raw` table definition, and why it has no unique key, is in the
-[SQL Guide](../sql_database_guide/README.md#bronze-the-landing-tables).
+[SQL Guide](../sql_database_guide/README.md#40-bronze-the-landing-tables).
 
 ---
 
-## Stage ③ Summary
+## 3.9 Stage ③ Summary
 
 | Concept | Design Decision | Why |
 |---------|------------------|-----|
@@ -527,7 +527,7 @@ The full `stg_tac_raw` table definition, and why it has no unique key, is in the
 
 ---
 
-## Relevant Files
+## 3.10 Relevant Files
 
 | File | What to Read |
 |------|-------------|

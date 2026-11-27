@@ -9,7 +9,7 @@ Gold views.
 
 ---
 
-## Where SQL Fits
+## 1.0 Where SQL Fits
 
 The pipeline has two halves, and they run at different times:
 
@@ -21,10 +21,10 @@ The pipeline has two halves, and they run at different times:
 Python never creates a table. If the schema hasn't been built, the loader fails on its first write. A simple
 way to explain it is that SQL builds the empty filing cabinet and labels the drawers, and Python files the
 papers into those drawers. How Python connects and what it writes is covered in
-[stage ③](../03_data_cleaning_and_transformation/README.md#how-python-and-sql-work-together) (Bronze) and
-[stage ④](../04_data_modelling_and_analytics/README.md#how-python-fills-silver-once-per-workbook) (Silver).
+[stage ③](../03_data_cleaning_and_transformation/README.md#36-how-python-and-sql-work-together) (Bronze) and
+[stage ④](../04_data_modelling_and_analytics/README.md#42-how-python-fills-silver-once-per-workbook) (Silver).
 
-## The SQL Files
+## 2.0 The SQL Files
 
 | File | What it is | How it's used |
 |------|------------|---------------|
@@ -34,7 +34,7 @@ papers into those drawers. How Python connects and what it writes is covered in
 | [`sql/views/v_validation_checks.sql`](../../sql/views/v_validation_checks.sql) | Ad-hoc data checks, despite its `v_` name. It creates no view | Run by hand after a load |
 | [`sql/analysis/*.sql`](../../sql/analysis/) | Ready-to-run benchmarking and trend queries against `nhs_gold` | Run by hand for analysis |
 
-## Building the Schema
+## 3.0 Building the Schema
 
 The schema is built with one command, run from the repository root:
 
@@ -52,17 +52,17 @@ The script runs in this order:
 | # | Statement | What it creates | Section |
 |---|-----------|-----------------|---------|
 | 1 | `CREATE DATABASE IF NOT EXISTS nhs_bronze / nhs_silver / nhs_gold` | Three empty databases, using `utf8mb4` so names such as *King’s* keep their characters | — |
-| 2 | `USE nhs_bronze;` then `CREATE TABLE` ×3 | `import_batch`, `stg_tac_raw`, `stg_provider_list`, all empty | [Bronze](#bronze-the-landing-tables) |
-| 3 | `USE nhs_silver;` then the four dimension tables | `dim_trust` (empty) and `dim_financial_year`, `dim_worksheet`, `dim_subcode` (seeded by `INSERT`) | [Silver](#silver-the-star-schema) |
-| 4 | `CREATE TABLE fct_tac` | The fact table, empty, with its foreign keys to the dimensions | [Silver](#silver-the-star-schema) |
-| 5 | `USE nhs_gold;` then `CREATE VIEW ...`, ending with `SOURCE sql/schema/deploy_gold_views.sql;` | The nine analytical views | [Gold](#gold-the-views) |
+| 2 | `USE nhs_bronze;` then `CREATE TABLE` ×3 | `import_batch`, `stg_tac_raw`, `stg_provider_list`, all empty | [Bronze](#40-bronze-the-landing-tables) |
+| 3 | `USE nhs_silver;` then the four dimension tables | `dim_trust` (empty) and `dim_financial_year`, `dim_worksheet`, `dim_subcode` (seeded by `INSERT`) | [Silver](#50-silver-the-star-schema) |
+| 4 | `CREATE TABLE fct_tac` | The fact table, empty, with its foreign keys to the dimensions | [Silver](#50-silver-the-star-schema) |
+| 5 | `USE nhs_gold;` then `CREATE VIEW ...`, ending with `SOURCE sql/schema/deploy_gold_views.sql;` | The nine analytical views | [Gold](#60-gold-the-views) |
 
 `DROP TABLE IF EXISTS` before each `CREATE TABLE` makes the script safe to re-run on a database that
 already has the tables, at the cost of the data in them.
 
 ---
 
-## Bronze: the Landing Tables
+## 4.0 Bronze: the Landing Tables
 
 Each Bronze table has one job:
 
@@ -180,7 +180,7 @@ Two details apply to every Bronze table:
 
 ---
 
-## Silver: the Star Schema
+## 5.0 Silver: the Star Schema
 
 The script switches to Silver with `USE nhs_silver;` and runs these steps in order:
 
@@ -235,11 +235,11 @@ CREATE TABLE fct_tac (
 
 `total_000s` is `NOT NULL` here, unlike `stg_tac_raw.total`, because blank amounts stay in Bronze and only
 populated figures are promoted. Why `sub_code` has no foreign key, and the full design of every dimension,
-is covered in [stage ④, The Star Schema](../04_data_modelling_and_analytics/README.md#the-star-schema).
+is covered in [stage ④, The Star Schema](../04_data_modelling_and_analytics/README.md#46-the-star-schema).
 
 ---
 
-## Gold: the Views
+## 6.0 Gold: the Views
 
 After Silver, the script runs `USE nhs_gold;` and creates the views. Its last line is:
 
@@ -302,9 +302,9 @@ can read it:
 ![nhs_silver tables to nhs_gold views: fct_tac and dim_trust feed six views that read Silver directly (v_income_expenditure and v_profit_and_loss from TAC02 SoCI, v_balance_sheet from TAC03 SoFP, v_cash_flow from TAC05 SoCF, v_expenditure_breakdown from TAC08 Op Exp, v_workforce from TAC09 Staff); dim_subcode also feeds v_expenditure_breakdown. v_kpis reads v_income_expenditure, v_expenditure_breakdown and v_workforce. v_trust_annual_scorecard reads v_kpis and those three views. v_statement_reconciliation reads v_profit_and_loss, v_balance_sheet, v_cash_flow and fct_tac (TAC19 CCE). Views store no data; each is calculated from Silver when it is queried.](../../docs/images/gold_view_lineage.png)
 
 What each view calculates, and the accounting behind it, is covered in
-[stage ④, Analytics Layer](../04_data_modelling_and_analytics/README.md#analytics-layer--the-nine-sql-views).
+[stage ④, Analytics Layer](../04_data_modelling_and_analytics/README.md#47-analytics-layer--the-nine-sql-views).
 
-### What happens when a view is read
+### 6.1 What happens when a view is read
 
 For example, when `export_for_powerbi.py` connects to `nhs_gold` and runs `SELECT ... FROM v_kpis`:
 
@@ -321,7 +321,7 @@ Nothing is stored along the way, so the KPIs always match the facts currently in
 
 ---
 
-## Who Writes and Reads Each Table
+## 7.0 Who Writes and Reads Each Table
 
 | Database | Table / view | Created by | Written by | Read by |
 |----------|--------------|------------|------------|---------|
@@ -337,7 +337,7 @@ Nothing is stored along the way, so the KPIs always match the facts currently in
 
 ---
 
-## Relevant Files
+## 8.0 Relevant Files
 
 | File | What to Read |
 |------|-------------|

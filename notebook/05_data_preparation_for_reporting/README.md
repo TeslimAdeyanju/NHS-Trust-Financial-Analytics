@@ -16,7 +16,7 @@ markmap:
 
 ---
 
-## One Helper, Twelve Callers
+## 5.1 One Helper, Twelve Callers
 
 Every export funnels through a single function:
 
@@ -38,7 +38,7 @@ one SQL query and one output file.
 
 ---
 
-## Two Details That Shape Every File
+## 5.2 Two Details That Shape Every File
 
 **The UTF-8 BOM.** `encoding="utf-8-sig"` on every `to_csv()` call prepends a byte-order mark. Without it,
 Excel — and Power BI's CSV connector, which shares Excel's parser on Windows — misreads the `£` symbol in
@@ -64,7 +64,7 @@ preserving the source's fractional £000 precision.
 
 ---
 
-## Two Files That Don't Come From a View
+## 5.3 Two Files That Don't Come From a View
 
 `export_income_detail()` and `export_expenditure_detail()` are the only two exports that query `fct_tac`
 directly instead of a pre-aggregated `v_*` view — because a drilldown-by-line-item table is exactly the
@@ -89,7 +89,7 @@ ORDER BY f.financial_year, t.org_code, f.sub_code
 `sc.is_subtotal = 0` matters here specifically: without it, a Power BI visual summing this file would
 double-count every trust's total alongside its own line items.
 
-## One File That Breaks the £000s Convention on Purpose
+## 5.4 One File That Breaks the £000s Convention on Purpose
 
 `export_sector_benchmarks()` pre-aggregates `v_kpis` by `(financial_year, sector, trust_type)` in SQL —
 counts, sums, and averages across every trust in a sector — and divides its money columns by 1,000 in the
@@ -104,7 +104,7 @@ sector-level sums in £000s run to eight figures and stop being readable on a be
 
 ---
 
-## The Thirteen Files
+## 5.5 The Thirteen Files
 
 | File | Source | Grain |
 |------|--------|-------|
@@ -130,7 +130,7 @@ the canonical Power BI export process.
 
 ---
 
-## Stage ⑤ Summary
+## 5.6 Stage ⑤ Summary
 
 | Concept | Design Decision | Why |
 |---------|------------------|-----|
@@ -143,7 +143,7 @@ the canonical Power BI export process.
 
 ---
 
-## Relevant Files
+## 5.7 Relevant Files
 
 | File | What to Read |
 |------|-------------|

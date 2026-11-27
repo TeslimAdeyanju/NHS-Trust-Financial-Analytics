@@ -14,7 +14,7 @@ markmap:
 
 ---
 
-## The 6 Files
+## 2.1 The 6 Files
 
 ```text
 data/raw/
@@ -52,9 +52,9 @@ def find_tac_files(raw_dir: Path) -> list[Path]:
 
 ---
 
-## Inside Each File: Two Sheets That Matter
+## 2.2 Inside Each File: Two Sheets That Matter
 
-### Sheet 1 — "List of Providers"
+### 2.2.1 Sheet 1 — "List of Providers"
 
 Small annual lookup table, one row per listed provider (68–70 NHS Trust rows or 143–145 Foundation Trust
 rows in the verified files). Not every listed provider necessarily has populated CY fact rows.
@@ -82,7 +82,7 @@ df = df[
 ]
 ```
 
-### Sheet 2 — "All data"
+### 2.2.2 Sheet 2 — "All data"
 
 The main data sheet: about 433,000–481,000 rows per NHS Trusts file and 884,000–1,006,000 per Foundation
 Trusts file (the rows preserved in Bronze in the verified run), long/narrow, exactly 7 columns. Each row is one reported amount: the trust and TAC schedule identify the context,
@@ -125,7 +125,7 @@ when workbooks are combined.
 
 ---
 
-## A Key Inconsistency Across File Versions
+## 2.3 A Key Inconsistency Across File Versions
 
 NHS England changed column names between 2021/22 and later files:
 
@@ -152,7 +152,7 @@ rather than special-casing "the old files" by hand.
 
 ---
 
-## What the Pipeline Reads from the Filename — Before Opening the File
+## 2.4 What the Pipeline Reads from the Filename — Before Opening the File
 
 Two critical facts live only in the filename, not inside the workbook:
 
@@ -172,7 +172,7 @@ else happens. Rename a file and the pipeline mis-tags every row inside it — th
 
 ---
 
-## Raw Data Quality Issues and How They're Handled
+## 2.5 Raw Data Quality Issues and How They're Handled
 
 | Issue | How handled |
 |-------|-------------|
@@ -184,7 +184,7 @@ else happens. Rename a file and the pipeline mis-tags every row inside it — th
 
 ---
 
-## Stage ② Summary
+## 2.6 Stage ② Summary
 
 | What you see in the raw file              | What it means                                         |
 |---------------------------------------------|----------------------------------------------------------|
@@ -197,7 +197,7 @@ else happens. Rename a file and the pipeline mis-tags every row inside it — th
 
 ---
 
-## Relevant Files
+## 2.7 Relevant Files
 
 | File | What to Read |
 |------|-------------|

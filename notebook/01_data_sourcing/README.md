@@ -13,7 +13,7 @@ markmap:
 
 ---
 
-## What TAC Actually Is
+## 1.1 What TAC Actually Is
 
 **Trust Accounts Consolidation (TAC)** is NHS England's annual process of collecting the audited
 statutory accounts of every NHS Trust and NHS Foundation Trust, in a standardised Excel template, and
@@ -28,7 +28,7 @@ publishing the consolidated result as open data.
   terms of use — this project's ingestion pipeline starts from files already on disk in `data/raw/`,
   because there is nothing upstream of that to call.
 
-## Why This Stage Exists on Its Own
+## 1.2 Why This Stage Exists on Its Own
 
 Every other stage in this pipeline is something *I* built. This one isn't — it's the fixed, external
 authority everything else is validated against. Keeping it as its own stage (rather than folding it into
@@ -37,7 +37,7 @@ number ever looks wrong, the question "is this what NHS England actually publish
 introduce the error?" always has an answer, because the original publication is a fixed, external
 reference point independent of anything in this repository.
 
-## The Money and Year Conventions, Set Once Here
+## 1.3 The Money and Year Conventions, Set Once Here
 
 Two conventions established at the source apply to every table, column, and file downstream:
 
@@ -55,7 +55,7 @@ The ingestion audit stores the SHA-256 of each source workbook alongside file si
 row counts, integrity results and final load status in `nhs_bronze.import_batch`. The workbooks are git-ignored, so
 recalculate SHA-256 before loading and compare it with that audit rather than relying on filenames alone.
 
-## No Code Here — By Design
+## 1.4 No Code Here — By Design
 
 There's nothing to link to in this stage's "Relevant Files" the way later stages link to a `.py` or `.sql`
 file, because nothing in this repository runs here. That absence is itself the point: it's the boundary
@@ -65,7 +65,7 @@ something to clean in place.
 
 ---
 
-## Relevant Files
+## 1.5 Relevant Files
 
 | File | What to Read |
 |------|-------------|

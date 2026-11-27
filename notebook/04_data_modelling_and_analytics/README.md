@@ -16,7 +16,7 @@ markmap:
 
 ---
 
-## Where SQL and Python Meet in This Stage
+## 4.1 Where SQL and Python Meet in This Stage
 
 The schema script built Silver's tables and Gold's views before any data was loaded. The
 **[SQL Guide](../sql_database_guide/README.md)** explains that build step by step: the order the tables are
@@ -28,9 +28,9 @@ covers what fills them:
 | `nhs_silver` | 4 dimension tables, 3 of them seeded with reference rows, plus the empty `fct_tac` | `dim_trust`, `fct_tac` and any missing `dim_worksheet` rows, once per workbook | Yes |
 | `nhs_gold` | 9 views (`CREATE VIEW`) | Nothing. Views are saved queries, calculated when they're read | No |
 
-## How Python Fills Silver, Once per Workbook
+## 4.2 How Python Fills Silver, Once per Workbook
 
-When `process_file()` reaches steps 11 and 12 of the [stage ③ flow](../03_data_cleaning_and_transformation/README.md#the-full-flow-for-one-workbook),
+When `process_file()` reaches steps 11 and 12 of the [stage ③ flow](../03_data_cleaning_and_transformation/README.md#363-the-full-flow-for-one-workbook),
 the file's data is already in Bronze. Two functions move it into Silver. Each opens **two** engines,
 `get_engine(STG_DB)` to read Bronze and `get_engine(SILVER_DB)` to write Silver, and the data passes
 through Python (as a pandas DataFrame) on its way between the two databases:
@@ -54,12 +54,12 @@ Three SQL patterns do most of the work here:
 
 ![Bronze to Silver, once per workbook: populate_dim_trust() reads this file's rows from stg_provider_list and upserts dim_trust with INSERT ... ON DUPLICATE KEY UPDATE. promote_to_fact() reads distinct worksheet names from stg_tac_raw and runs INSERT IGNORE into dim_worksheet, then joins stg_tac_raw to stg_provider_list for current-year, non-blank rows and, in one transaction, deletes this file's slice of fct_tac and inserts the new rows in chunks. dim_trust and dim_worksheet are written before fct_tac because fct_tac has foreign keys to both.](../../docs/images/stage4_promote_to_silver_flow.png)
 
-The sections further down show the exact SQL for [`populate_dim_trust()`](#populate_dim_trust--slowly-changing-dimension-type-1)
-and [`promote_to_fact()`](#promote_to_fact--the-critical-join).
+The sections further down show the exact SQL for [`populate_dim_trust()`](#44-populate_dim_trust--slowly-changing-dimension-type-1)
+and [`promote_to_fact()`](#45-promote_to_fact--the-critical-join).
 
 ---
 
-## Three-statement financial model
+## 4.3 Three-statement financial model
 
 The analytical model now explicitly distinguishes the three NHS financial statements instead of treating income and expenditure as a complete sustainability assessment.
 
@@ -71,7 +71,7 @@ The analytical model now explicitly distinguishes the three NHS financial statem
 
 The Silver `fct_tac` remains long-form and source-code traceable. In the Gold layer, individual accounting statement views pivot the selected statement lines to one trust/year row. This is a pragmatic extension of the existing schema, not a claim that all proposed future dimension tables are implemented.
 
-### Accounting reconciliation
+### 4.3.1 Accounting reconciliation
 
 [`v_statement_reconciliation.sql`](../../sql/views/v_statement_reconciliation.sql) exposes diagnostic residuals for:
 
@@ -82,7 +82,7 @@ The Silver `fct_tac` remains long-form and source-code traceable. In the Gold la
 
 A zero residual supports internal agreement **only if all required inputs and reporting definitions are correct**; null means unavailable and must not be silently treated as passing. Additional template-specific movements and accounting adjustments may have to be reconciled for opening/closing cash. These checks do **not** establish reconciliation to NHS England's national before-impairments-and-transfers performance measure.
 
-### Deployment order and review
+### 4.3.2 Deployment order and review
 
 Run [`sql/schema/deploy_gold_views.sql`](../../sql/schema/deploy_gold_views.sql) from the repository root
 with `mysql --commands -u root -p < sql/schema/deploy_gold_views.sql`. MySQL 9 disables client commands
@@ -114,7 +114,7 @@ Full analysis, including a trap in the cash note's two value columns:
 ---
 
 
-## `populate_dim_trust()` — Slowly Changing Dimension, Type 1
+## 4.4 `populate_dim_trust()` — Slowly Changing Dimension, Type 1
 
 `populate_dim_trust(financial_year, trust_type)` reads only the providers for the file currently loading,
 then upserts them:
@@ -155,7 +155,7 @@ as it was in the latest year it appears. Three things about it are deliberate:
 Trusts that closed keep their final year: The Pennine Acute Hospitals and North West Boroughs end at
 2021/22; Yeovil District Hospital and Northern Devon Healthcare end at 2022/23.
 
-## `promote_to_fact()` — The Critical Join
+## 4.5 `promote_to_fact()` — The Critical Join
 
 **Step A — resolve `org_code` by joining staging against the provider list:**
 
@@ -240,7 +240,7 @@ counts, while `source_sha256` records the exact workbook content used.
 
 ---
 
-## The Star Schema
+## 4.6 The Star Schema
 
 <p align="center">
 <img src="../../docs/images/star_schema.png" width="560" alt="Entity relationship diagram from DbVisualizer: fct_tac has three enforced foreign keys — org_code (to dim_trust), financial_year (to dim_financial_year), and worksheet_name (to dim_worksheet). dim_subcode.worksheet_name also has its own foreign key to dim_worksheet.worksheet_name. sub_code on fct_tac remains unconstrained by design, joining to dim_subcode." />
@@ -286,7 +286,7 @@ declared it, but the deployed table didn't have it. I checked for orphaned `work
 (none), then added it directly with `ALTER TABLE ... ADD CONSTRAINT`. Full story, including the
 `SHOW CREATE TABLE` verification, is in `project_documentation.md`, stage ④.
 
-### `dim_subcode` — the dimension that drives every view
+### 4.6.1 `dim_subcode` — the dimension that drives every view
 
 ```sql
 CREATE TABLE dim_subcode (
@@ -307,13 +307,13 @@ SubCode list — tag once in the dimension, every view benefits. `is_subtotal` f
 
 ---
 
-## Analytics Layer — The Nine SQL Views
+## 4.7 Analytics Layer — The Nine SQL Views
 
 `fct_tac` is correct once loaded, but it still contains millions of individual SubCode rows — not something a
 dashboard can chart. Nine `nhs_gold` views pivot it into trust-level, year-level tables — each
 fully-qualifying its `nhs_silver` source tables, since Gold and Silver are separate databases.
 How the views are deployed, their order, and what MySQL does when one is read are covered in the
-[SQL Guide, Gold](../sql_database_guide/README.md#gold-the-views).
+[SQL Guide, Gold](../sql_database_guide/README.md#60-gold-the-views).
 
 **`v_income_expenditure`** — pivots TAC02 SoCI SubCodes into an I&E summary row per trust per year:
 
@@ -373,7 +373,7 @@ narrower views (including `v_profit_and_loss`/`v_balance_sheet`) separately inst
 
 ---
 
-## Stage ④ Summary
+## 4.8 Stage ④ Summary
 
 | Concept | Design Decision | Why |
 |---------|------------------|-----|
@@ -388,7 +388,7 @@ narrower views (including `v_profit_and_loss`/`v_balance_sheet`) separately inst
 
 ---
 
-## Relevant Files
+## 4.9 Relevant Files
 
 | File | What to Read |
 |------|-------------|

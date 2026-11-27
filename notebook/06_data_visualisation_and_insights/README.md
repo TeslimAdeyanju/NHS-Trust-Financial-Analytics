@@ -18,7 +18,7 @@ markmap:
 
 ---
 
-## Import and Rename
+## 6.1 Import and Rename
 
 Each CSV is imported via **Get Data → Text/CSV** and renamed on import to the `fact_`/`dim_` prefix
 convention Power BI's own model view then displays:
@@ -51,7 +51,7 @@ overdrafts back (the balance sheet shows cash gross, the cash-flow statement net
 
 ---
 
-## Model Relationships
+## 6.2 Model Relationships
 
 Every fact table joins to the two dimensions on `org_code` and/or `financial_year`, single-direction,
 many-to-one — with one deliberate exception:
@@ -77,7 +77,7 @@ diagram, re-exported from Power BI's own model view, is in `project_documentatio
 
 ---
 
-## DAX Measures — 51 in One Table
+## 6.3 DAX Measures — 51 in One Table
 
 Every measure — all 51 — lives in `_Measures`, never inside a fact table, and never as an implicit
 measure dragged straight off a column. Three real patterns cover almost all of them:
@@ -129,7 +129,7 @@ Two versions of every measure exist, and only one is authoritative if they ever 
 
 ---
 
-## Report Pages (specified, publication pending)
+## 6.4 Report Pages (specified, publication pending)
 
 Full visual-by-visual specifications are in [power_bi/setup_guide.md](../../power_bi/setup_guide.md).
 
@@ -144,7 +144,7 @@ Full visual-by-visual specifications are in [power_bi/setup_guide.md](../../powe
 `dim_trust[sector]`, `dim_trust[trust_type]`, `dim_trust[region]`, and `dim_financial_year[financial_year]` are placed as slicers
 on every page, filtering all of that page's visuals simultaneously.
 
-## The RAG Palette
+## 6.5 The RAG Palette
 
 Read directly out of the `*RAG Colour` measures, not approximated — these four values are the only ones
 used for anything tied to a RAG status:
@@ -156,7 +156,7 @@ Red (unsustainable):  #DA291C     Grey (no data):  #E8EDEE
 
 ---
 
-## Stage ⑥ Summary
+## 6.6 Stage ⑥ Summary
 
 | Concept | Design Decision | Why |
 |---------|------------------|-----|
@@ -168,7 +168,7 @@ Red (unsustainable):  #DA291C     Grey (no data):  #E8EDEE
 
 ---
 
-## Relevant Files
+## 6.7 Relevant Files
 
 | File | What to Read |
 |------|-------------|

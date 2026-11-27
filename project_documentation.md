@@ -23,12 +23,12 @@ This document explains the business question, NHS accounting context, implemente
 **[2.0 Part II — Research Methodology](#20-part-ii--research-methodology)**
 
 - [2.1 Methodology: Six-Stage Data Analytics Lifecycle](#21-methodology-six-stage-data-analytics-lifecycle)
-- [2.2 Stage 1 — Data Sourcing](#22-stage-1--data-sourcing) — obtain authoritative NHS England TAC data and define source controls.
-- [2.3 Stage 2 — Data Ingestion](#23-stage-2--data-ingestion) — capture source workbooks and load raw records to Bronze.
-- [2.4 Stage 3 — Data Cleaning & Transformation](#24-stage-3--data-cleaning--transformation) — standardise, validate and conform records in Silver.
-- [2.5 Stage 4 — Data Modelling & Analytics](#25-stage-4--data-modelling--analytics) — organise dimensions, facts and financial KPIs in Silver and Gold.
-- [2.6 Stage 5 — Data Preparation for Reporting](#26-stage-5--data-preparation-for-reporting) — prepare curated datasets and exports.
-- [2.7 Stage 6 — Data Visualisation & Insights](#27-stage-6--data-visualisation--insights) — design and communicate Power BI financial analysis.
+- [2.2 Data Sourcing (Stage 1)](#22-data-sourcing-stage-1) — obtain authoritative NHS England TAC data and define source controls.
+- [2.3 Data Ingestion (Stage 2)](#23-data-ingestion-stage-2) — capture source workbooks and load raw records to Bronze.
+- [2.4 Data Cleaning & Transformation (Stage 3)](#24-data-cleaning--transformation-stage-3) — standardise, validate and conform records in Silver.
+- [2.5 Data Modelling & Analytics (Stage 4)](#25-data-modelling--analytics-stage-4) — organise dimensions, facts and financial KPIs in Silver and Gold.
+- [2.6 Data Preparation for Reporting (Stage 5)](#26-data-preparation-for-reporting-stage-5) — prepare curated datasets and exports.
+- [2.7 Data Visualisation & Insights (Stage 6)](#27-data-visualisation--insights-stage-6) — design and communicate Power BI financial analysis.
 
 **[3.0 Part III — Findings, Validation and Project Outcomes](#30-part-iii--findings-validation-and-project-outcomes)**
 
@@ -167,12 +167,12 @@ The warehouse may contain more organisational identifiers than a year-specific a
 
 The methodology is organised as six consecutive stages. Select a stage to go directly to its technical explanation:
 
-1. [Data Sourcing](#22-stage-1--data-sourcing) — obtain authoritative NHS England TAC data and define source controls.
-2. [Data Ingestion](#23-stage-2--data-ingestion) — capture source workbooks and load raw records to Bronze.
-3. [Data Cleaning & Transformation](#24-stage-3--data-cleaning--transformation) — standardise, validate and conform records in Silver.
-4. [Data Modelling & Analytics](#25-stage-4--data-modelling--analytics) — organise dimensions, facts and financial KPIs in Silver and Gold.
-5. [Data Preparation for Reporting](#26-stage-5--data-preparation-for-reporting) — prepare curated datasets and exports.
-6. [Data Visualisation & Insights](#27-stage-6--data-visualisation--insights) — design and communicate Power BI financial analysis.
+1. [Data Sourcing](#22-data-sourcing-stage-1) — obtain authoritative NHS England TAC data and define source controls.
+2. [Data Ingestion](#23-data-ingestion-stage-2) — capture source workbooks and load raw records to Bronze.
+3. [Data Cleaning & Transformation](#24-data-cleaning--transformation-stage-3) — standardise, validate and conform records in Silver.
+4. [Data Modelling & Analytics](#25-data-modelling--analytics-stage-4) — organise dimensions, facts and financial KPIs in Silver and Gold.
+5. [Data Preparation for Reporting](#26-data-preparation-for-reporting-stage-5) — prepare curated datasets and exports.
+6. [Data Visualisation & Insights](#27-data-visualisation--insights-stage-6) — design and communicate Power BI financial analysis.
 
 The project is explained using stages named for **the work performed**, not merely the software or storage location.
 
@@ -195,7 +195,7 @@ The [simplified lifecycle diagram](docs/images/pipeline_architecture_stages.svg)
 
 ---
 
-### 2.2 Stage 1 — Data Sourcing
+### 2.2 Data Sourcing (Stage 1)
 
 **Purpose.** Establish the source, time frame and accounting basis for the investigation.
 
@@ -209,7 +209,7 @@ The main decisions at this stage are which reporting years to examine, which acc
 
 ---
 
-### 2.3 Stage 2 — Data Ingestion
+### 2.3 Data Ingestion (Stage 2)
 
 **Purpose.** Bring the published data into a controlled environment while preserving its origin.
 
@@ -222,7 +222,7 @@ The process also captures the financial year, trust type, source filename and SH
 
 ---
 
-### 2.4 Stage 3 — Data Cleaning & Transformation
+### 2.4 Data Cleaning & Transformation (Stage 3)
 
 **Purpose.** Make financial records consistent and trustworthy enough to combine across reporting years.
 
@@ -235,7 +235,7 @@ Validated information is organised in the Silver layer, where providers and acco
 
 ---
 
-### 2.5 Stage 4 — Data Modelling & Analytics
+### 2.5 Data Modelling & Analytics (Stage 4)
 
 **Purpose.** Transform accounting records into meaningful financial indicators and comparisons.
 
@@ -249,7 +249,7 @@ The SoFP-to-SoCF closing-cash exceptions above £1k are explained by bank overdr
 
 ---
 
-### 2.6 Stage 5 — Data Preparation for Reporting
+### 2.6 Data Preparation for Reporting (Stage 5)
 
 **Purpose.** Prepare consistent datasets for a business intelligence report.
 
@@ -263,7 +263,7 @@ Thirteen canonical files are written to `data/processed/powerbi_export/`. Nine e
 
 ---
 
-### 2.7 Stage 6 — Data Visualisation & Insights
+### 2.7 Data Visualisation & Insights (Stage 6)
 
 **Purpose.** Turn validated financial analysis into information that finance professionals and board members can understand and explore.
 
