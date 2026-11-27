@@ -1,3 +1,9 @@
+---
+markmap:
+  initialExpandLevel: 2
+  colorFreezeLevel: 2
+---
+
 # NHS Trust Financial Analytics — Project Documentation
 
 **Research-led financial analytics | NHS England provider accounts | 2021/22–2023/24**
