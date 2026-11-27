@@ -24,198 +24,32 @@ covers what fills them:
 
 ## How Python Fills Silver, Once per Workbook
 
-These are steps 11 and 12 of the [stage ③ flow](../03_data_cleaning_and_transformation/README.md#the-full-flow-for-one-workbook).
-By then, the file's data is already in Bronze. Both functions open **two** engines, `get_engine(STG_DB)` to
-read Bronze and `get_engine(SILVER_DB)` to write Silver, and the data passes through Python (as a pandas
-DataFrame) on its way between the two databases.
+When `process_file()` reaches steps 11 and 12 of the [stage ③ flow](../03_data_cleaning_and_transformation/README.md#the-full-flow-for-one-workbook),
+the file's data is already in Bronze. Two functions move it into Silver. Each opens **two** engines,
+`get_engine(STG_DB)` to read Bronze and `get_engine(SILVER_DB)` to write Silver, and the data passes
+through Python (as a pandas DataFrame) on its way between the two databases:
 
-| # | Function | Source | What it does | Reads from Bronze | Writes to Silver |
-|---|----------|--------|--------------|-------------------|------------------|
-| 11 | `populate_dim_trust()` | [`load_tac_data.py`](../../python/ingestion/load_tac_data.py) | Adds new trusts, updates existing ones to their latest name, sector and region | `stg_provider_list` (this file only) | `dim_trust` (upsert) |
-| 12a | `promote_to_fact()` | [`load_tac_data.py`](../../python/ingestion/load_tac_data.py) | Adds any schedule missing from `dim_worksheet` | `stg_tac_raw` (distinct worksheet names) | `dim_worksheet` (`INSERT IGNORE`) |
-| 12b | `promote_to_fact()` | [`load_tac_data.py`](../../python/ingestion/load_tac_data.py) | Attaches the ODS code to every current-year, non-blank figure | `stg_tac_raw` joined to `stg_provider_list` | — |
-| 12c | `promote_to_fact()` | [`load_tac_data.py`](../../python/ingestion/load_tac_data.py) | Deletes this file's year/type slice, then inserts in chunks of 1,000, in one transaction | — | `fct_tac` |
+| # | Python file → function | Reads (SQL on Bronze) | Writes (SQL on Silver) | Why |
+|---|----------|-----------------------|------------------------|-----|
+| 1 | [`load_tac_data.py`](../../python/ingestion/load_tac_data.py) → `populate_dim_trust()` | `SELECT DISTINCT org_code, organisation_name, sector, region, trust_type FROM stg_provider_list` for this file only | `INSERT INTO dim_trust ... ON DUPLICATE KEY UPDATE` | `fct_tac.org_code` has a foreign key to `dim_trust`, so every trust must exist before its facts |
+| 2 | [`load_tac_data.py`](../../python/ingestion/load_tac_data.py) → `promote_to_fact()` | `SELECT DISTINCT worksheet_name FROM stg_tac_raw` for this file | `INSERT IGNORE INTO dim_worksheet` | `fct_tac.worksheet_name` has a foreign key to `dim_worksheet`, so every schedule must exist first |
+| 3 | [`load_tac_data.py`](../../python/ingestion/load_tac_data.py) → `promote_to_fact()` | `stg_tac_raw JOIN stg_provider_list` on the name key, current year and non-blank amounts only | — | Attaches the ODS code to every figure |
+| 4 | [`load_tac_data.py`](../../python/ingestion/load_tac_data.py) → `promote_to_fact()` | — | One transaction: `DELETE FROM fct_tac` for this file's year and type, then `INSERT ... ON DUPLICATE KEY UPDATE` in chunks of 1,000 | Replaces this file's slice of the fact table, and only that slice |
 
-**The order is forced by the foreign keys.** `fct_tac.org_code` must exist in `dim_trust`, and
-`fct_tac.worksheet_name` must exist in `dim_worksheet`, so steps 11 and 12a always run before 12c.
-
-```mermaid
-%%{init: {"flowchart": {"nodeSpacing": 25, "rankSpacing": 45, "curve": "basis"}, "themeVariables": {"fontSize": "14px"}}}%%
-flowchart LR
-    subgraph BR["nhs_bronze (read)"]
-        direction TB
-        PL[("stg_provider_list")]
-        RAW[("stg_tac_raw")]
-    end
-
-    subgraph PY["load_tac_data.py"]
-        direction TB
-        S11["11 · populate_dim_trust()<br/>upsert trusts"]
-        S12a["12a · promote_to_fact()<br/>add missing schedules"]
-        S12b["12b · promote_to_fact()<br/>join: current-year, non-blank"]
-        S12c["12c · promote_to_fact()<br/>one transaction:<br/>DELETE slice, INSERT in chunks"]
-        S11 --> S12a --> S12b --> S12c
-    end
-
-    subgraph SV["nhs_silver (write)"]
-        direction TB
-        DT[("dim_trust")]
-        DW[("dim_worksheet")]
-        F[("fct_tac")]
-    end
-
-    PL --> S11
-    RAW --> S12a
-    RAW & PL --> S12b
-    S11 --> DT
-    S12a --> DW
-    S12c --> F
-    DT -. foreign key .-> F
-    DW -. foreign key .-> F
-
-    classDef bronze fill:#F8EFE4,stroke:#D4A373,color:#14253D
-    classDef silver fill:#EDF1F6,stroke:#9AAEC4,color:#14253D
-    class PL,RAW bronze
-    class DT,DW,F silver
-```
-
-Three SQL patterns do the work:
+Three SQL patterns do most of the work here:
 
 - **`INSERT ... ON DUPLICATE KEY UPDATE`** (an "upsert") inserts a row, or updates it if a row with the
-  same key already exists. `dim_trust` uses it because the same trust appears in several workbooks and
-  should end up as one row.
-- **`INSERT IGNORE`** inserts a row, or does nothing if it already exists, so a seeded schedule keeps its
-  proper title.
+  same primary or unique key already exists. `dim_trust` uses it because the same trust appears in several
+  workbooks and should end up as one row.
+- **`INSERT IGNORE`** inserts a row, or does nothing if it already exists. `dim_worksheet` uses it because
+  a seeded schedule must keep its proper title.
 - **Scoped `DELETE` then `INSERT` inside one transaction** replaces exactly one workbook's facts. If the
   insert fails part-way, the delete is rolled back too, and the previous facts stay in place.
 
----
+![Bronze to Silver, once per workbook: populate_dim_trust() reads this file's rows from stg_provider_list and upserts dim_trust with INSERT ... ON DUPLICATE KEY UPDATE. promote_to_fact() reads distinct worksheet names from stg_tac_raw and runs INSERT IGNORE into dim_worksheet, then joins stg_tac_raw to stg_provider_list for current-year, non-blank rows and, in one transaction, deletes this file's slice of fct_tac and inserts the new rows in chunks. dim_trust and dim_worksheet are written before fct_tac because fct_tac has foreign keys to both.](../../docs/images/stage4_promote_to_silver_flow.png)
 
-## How It Works in the Code
-
-### Step 11 — `populate_dim_trust()`: Slowly Changing Dimension, Type 1
-
-`populate_dim_trust(financial_year, trust_type)` reads only the providers for the file currently loading,
-then upserts them:
-
-```sql
-INSERT INTO dim_trust (org_code, organisation_name, trust_type, sector, region, is_foundation,
-                        first_year_seen, last_year_seen)
-VALUES (...)
-ON DUPLICATE KEY UPDATE
-    -- descriptive attributes: take the incoming value only if this year is the latest seen
-    organisation_name = IF(VALUES(last_year_seen) >= COALESCE(last_year_seen, ''),
-                           VALUES(organisation_name), organisation_name),
-    trust_type        = IF(... same test ..., VALUES(trust_type), trust_type),
-    is_foundation     = IF(... same test ..., VALUES(is_foundation), is_foundation),
-    sector            = IF(... same test ..., COALESCE(VALUES(sector), sector), sector),
-    region            = IF(... same test ..., COALESCE(VALUES(region), region), region),
-    -- year range: only ever widens
-    first_year_seen   = LEAST(COALESCE(first_year_seen, VALUES(first_year_seen)), VALUES(first_year_seen)),
-    last_year_seen    = GREATEST(COALESCE(last_year_seen, VALUES(last_year_seen)), VALUES(last_year_seen)),
-    updated_ts        = CURRENT_TIMESTAMP;
-```
-
-This overwrites rather than versions — a Type 1 SCD, not Type 2: one row per ODS code, showing the trust
-as it was in the latest year it appears. Three things about it are deliberate:
-
-- **It doesn't depend on load order.** Files load in filename order — all Foundation Trust years, then
-  all NHS Trust years — not chronologically. `LEAST`/`GREATEST` mean the year range can only widen, and
-  the "is this the latest year?" test means an older file can never overwrite newer details. Loading the
-  six files in reverse gives an identical table.
-- **Renamed trusts show their current name.** Three trusts were renamed under the same ODS code in this
-  period — `RQX` Homerton University Hospital → Homerton Healthcare, `RH8` Royal Devon and Exeter → Royal
-  Devon University Healthcare, `RBN` St Helens and Knowsley → Mersey and West Lancashire. NHS England also
-  changes capitalisation between years ("Maidstone And Tunbridge Wells"); the latest spelling wins.
-- **Order of assignments matters.** MySQL evaluates the `UPDATE` assignments left to right, and later ones
-  see earlier updates, so every "is this the latest year?" test runs before `last_year_seen` itself moves.
-  `COALESCE(VALUES(sector), sector)` keeps an existing value if a newer file has a blank.
-
-Trusts that closed keep their final year: The Pennine Acute Hospitals and North West Boroughs end at
-2021/22; Yeovil District Hospital and Northern Devon Healthcare end at 2022/23.
-
-### Step 12 — `promote_to_fact()`: The Critical Join
-
-Three parts, run in this order:
-
-**12a — Add any missing schedules to `dim_worksheet`.** Before the join runs, every distinct
-`worksheet_name` in this file's staging rows is guaranteed to exist in `dim_worksheet`:
-
-```python
-for ws_name in stg_sheets["worksheet_name"]:
-    conn.execute(text("""
-        INSERT IGNORE INTO dim_worksheet (worksheet_name, schedule_title, category)
-        VALUES (:ws, :ws, 'OTHER')
-    """), {"ws": ws_name})
-```
-
-The schema seeds 28 schedules with proper titles. The source files also contain four it doesn't seed
-(`TAC00 - IFRS 16 Transition`, `TAC10 Op leases`, `TAC10X IAS 17 comparatives` and `TAC23 Reval Res`), and
-these are added here with a placeholder title and `category = 'OTHER'`. Without this step, the foreign key
-from `fct_tac.worksheet_name` would reject their facts in 12c. `INSERT IGNORE` makes it a no-op for any
-schedule that already exists, so seeded titles are never overwritten. Giving the four placeholders real
-titles in the seed is an open tidy-up; this step stays as the safety net for any schedule NHS England adds
-in a future year.
-
-**12b — Attach the ODS code by joining staging to the provider list.** This runs on the Bronze engine, and
-the result comes back to Python as a DataFrame:
-
-```sql
-SELECT p.org_code, r.*
-FROM stg_tac_raw r
-JOIN stg_provider_list p
-    ON  r.provider_name_key = p.provider_name_key
-   AND  r.financial_year    = p.financial_year
-   AND  r.trust_type        = p.trust_type
-WHERE r.financial_year = :fy AND r.trust_type = :tt
-  AND r.year_type = 'CY'          -- PY comparison rows stay in Bronze only
-  AND r.total IS NOT NULL         -- blank amounts stay in Bronze only; zeros are promoted
-```
-
-The join uses the normalised name key built in [stage ③](../03_data_cleaning_and_transformation/README.md),
-limited to the same year and trust type. The join can't silently drop a figure: the stage ③ quality gate has
-already rejected the file if any populated current-year row was unmatched, or if a name matched more than one
-ODS code.
-
-**12c — Replace this file's slice of `fct_tac` in one transaction**, inserting in chunks of 1,000:
-
-```python
-with silver_engine.begin() as conn:   # one transaction for the delete and every chunk
-    conn.execute(text("DELETE FROM fct_tac WHERE financial_year = :fy AND trust_type = :tt"),
-                 {"fy": financial_year, "tt": trust_type})
-    for start in range(0, len(fact_df), 1000):
-        chunk = fact_df.iloc[start: start + 1000]
-        conn.execute(upsert_sql, chunk.to_dict(orient="records"))
-```
-
-```sql
-INSERT INTO fct_tac (org_code, financial_year, worksheet_name, table_id,
-                      main_code, sub_code, total_000s, trust_type, source_file, source_sha256)
-VALUES (...)
-ON DUPLICATE KEY UPDATE
-    worksheet_name = VALUES(worksheet_name),
-    table_id       = VALUES(table_id),
-    total_000s     = VALUES(total_000s),
-    source_file    = VALUES(source_file),
-    source_sha256  = VALUES(source_sha256),
-    load_ts        = CURRENT_TIMESTAMP;
-```
-
-Chunked because `to_sql()` — used for the simpler staging load — doesn't support
-`ON DUPLICATE KEY UPDATE`; this uses parameterised SQL instead.
-
-**Why scoped replacement plus UPSERT?** `fct_tac` accumulates all six files, so a table-wide truncate would
-erase other years and trust types. An UPSERT alone, however, cannot remove stale facts that disappeared
-from a corrected workbook. The pipeline therefore opens one transaction, deletes only the current
-`(financial_year, trust_type)` scope, and inserts the freshly validated rows. The unique key remains a
-second idempotency guard:
-
-```sql
-UNIQUE KEY uq_tac (org_code, financial_year, main_code, sub_code)
-```
-
-Running the pipeline twice against the same file leaves `fct_tac` and `dim_trust` with identical row
-counts, while `source_sha256` records the exact workbook content used.
+The sections further down show the exact SQL for [`populate_dim_trust()`](#populate_dim_trust--slowly-changing-dimension-type-1)
+and [`promote_to_fact()`](#promote_to_fact--the-critical-join).
 
 ---
 
@@ -270,6 +104,133 @@ overdraft, and each residual equalled the trust's overdraft (`CCE0140`) to withi
 
 Full analysis, including a trap in the cash note's two value columns:
 [financial reconciliation workpaper, section 4.1](../../reports/nhs_financial_reconciliation.md#41-closing-cash-exceptions-explained-by-bank-overdrafts).
+
+---
+
+
+## `populate_dim_trust()` — Slowly Changing Dimension, Type 1
+
+`populate_dim_trust(financial_year, trust_type)` reads only the providers for the file currently loading,
+then upserts them:
+
+```sql
+INSERT INTO dim_trust (org_code, organisation_name, trust_type, sector, region, is_foundation,
+                        first_year_seen, last_year_seen)
+VALUES (...)
+ON DUPLICATE KEY UPDATE
+    -- descriptive attributes: take the incoming value only if this year is the latest seen
+    organisation_name = IF(VALUES(last_year_seen) >= COALESCE(last_year_seen, ''),
+                           VALUES(organisation_name), organisation_name),
+    trust_type        = IF(... same test ..., VALUES(trust_type), trust_type),
+    is_foundation     = IF(... same test ..., VALUES(is_foundation), is_foundation),
+    sector            = IF(... same test ..., COALESCE(VALUES(sector), sector), sector),
+    region            = IF(... same test ..., COALESCE(VALUES(region), region), region),
+    -- year range: only ever widens
+    first_year_seen   = LEAST(COALESCE(first_year_seen, VALUES(first_year_seen)), VALUES(first_year_seen)),
+    last_year_seen    = GREATEST(COALESCE(last_year_seen, VALUES(last_year_seen)), VALUES(last_year_seen)),
+    updated_ts        = CURRENT_TIMESTAMP;
+```
+
+This overwrites rather than versions — a Type 1 SCD, not Type 2: one row per ODS code, showing the trust
+as it was in the latest year it appears. Three things about it are deliberate:
+
+- **It doesn't depend on load order.** Files load in filename order — all Foundation Trust years, then
+  all NHS Trust years — not chronologically. `LEAST`/`GREATEST` mean the year range can only widen, and
+  the "is this the latest year?" test means an older file can never overwrite newer details. Loading the
+  six files in reverse gives an identical table.
+- **Renamed trusts show their current name.** Three trusts were renamed under the same ODS code in this
+  period — `RQX` Homerton University Hospital → Homerton Healthcare, `RH8` Royal Devon and Exeter → Royal
+  Devon University Healthcare, `RBN` St Helens and Knowsley → Mersey and West Lancashire. NHS England also
+  changes capitalisation between years ("Maidstone And Tunbridge Wells"); the latest spelling wins.
+- **Order of assignments matters.** MySQL evaluates the `UPDATE` assignments left to right, and later ones
+  see earlier updates, so every "is this the latest year?" test runs before `last_year_seen` itself moves.
+  `COALESCE(VALUES(sector), sector)` keeps an existing value if a newer file has a blank.
+
+Trusts that closed keep their final year: The Pennine Acute Hospitals and North West Boroughs end at
+2021/22; Yeovil District Hospital and Northern Devon Healthcare end at 2022/23.
+
+## `promote_to_fact()` — The Critical Join
+
+**Step A — resolve `org_code` by joining staging against the provider list:**
+
+```sql
+SELECT p.org_code, r.*
+FROM stg_tac_raw r
+JOIN stg_provider_list p
+    ON  r.provider_name_key = p.provider_name_key
+   AND  r.financial_year    = p.financial_year
+   AND  r.trust_type        = p.trust_type
+WHERE r.financial_year = :fy AND r.trust_type = :tt
+  AND r.year_type = 'CY'          -- PY comparison rows stay in Bronze only
+  AND r.total IS NOT NULL         -- blank amounts stay in Bronze only; zeros are promoted
+```
+
+The deterministic `provider_name_key` normalises case, punctuation and whitespace, then applies two
+reviewed historical aliases. It is still constrained to the same year and file type. Before any database
+write, `validate()` now fails the file if a populated current-year row is unmatched or if one key maps to
+multiple ODS codes, so the promotion join cannot silently lose source facts.
+
+**Step B — a self-healing step most walkthroughs of this pipeline miss:** before the join runs, every
+distinct `worksheet_name` present in this file's staging rows is guaranteed to exist in `dim_worksheet`:
+
+```python
+for ws_name in stg_sheets["worksheet_name"]:
+    conn.execute(text("""
+        INSERT IGNORE INTO dim_worksheet (worksheet_name, schedule_title, category)
+        VALUES (:ws, :ws, 'OTHER')
+    """), {"ws": ws_name})
+```
+
+The DDL seeds **28** worksheets with proper titles and categories (the original seeded 19). Four more in
+the source files are self-healed with a placeholder title and `category = 'OTHER'` — `TAC00 - IFRS 16
+Transition`, `TAC10 Op leases`, `TAC10X IAS 17 comparatives` and `TAC23 Reval Res`. `TAC10X IAS 17
+comparatives` and `TAC14X RoU Assets PY` are comparative-only schedules with no CY rows. Rather than let the `worksheet_name → dim_worksheet` foreign
+key on `fct_tac` reject a row the DDL author didn't happen to seed, `promote_to_fact()` self-heals the
+dimension first, via `INSERT IGNORE` so it's a no-op if the row already exists. This is a defensive
+pattern worth calling out on its own: a dimension table doesn't have to be perfectly pre-seeded to be safe
+to enforce a foreign key against, provided the promotion step is prepared to extend it. Adding the four
+placeholder schedules to the DDL seed, with real titles, is an open tidy-up; the self-heal stays as the
+safety net for any schedule NHS England adds in a future year.
+
+**Step C — atomically replace the current source scope, then UPSERT in chunks:**
+
+```python
+with silver_engine.begin() as conn:   # one transaction for the delete and every chunk
+    conn.execute(text("DELETE FROM fct_tac WHERE financial_year = :fy AND trust_type = :tt"),
+                 {"fy": financial_year, "tt": trust_type})
+    for start in range(0, len(fact_df), 1000):
+        chunk = fact_df.iloc[start: start + 1000]
+        conn.execute(upsert_sql, chunk.to_dict(orient="records"))
+```
+
+```sql
+INSERT INTO fct_tac (org_code, financial_year, worksheet_name, table_id,
+                      main_code, sub_code, total_000s, trust_type, source_file, source_sha256)
+VALUES (...)
+ON DUPLICATE KEY UPDATE
+    worksheet_name = VALUES(worksheet_name),
+    table_id       = VALUES(table_id),
+    total_000s     = VALUES(total_000s),
+    source_file    = VALUES(source_file),
+    source_sha256  = VALUES(source_sha256),
+    load_ts        = CURRENT_TIMESTAMP;
+```
+
+Chunked because `to_sql()` — used for the simpler staging load — doesn't support
+`ON DUPLICATE KEY UPDATE`; this uses parameterised SQL instead.
+
+**Why scoped replacement plus UPSERT?** `fct_tac` accumulates all six files, so a table-wide truncate would
+erase other years and trust types. An UPSERT alone, however, cannot remove stale facts that disappeared
+from a corrected workbook. The pipeline therefore opens one transaction, deletes only the current
+`(financial_year, trust_type)` scope, and inserts the freshly validated rows. The unique key remains a
+second idempotency guard:
+
+```sql
+UNIQUE KEY uq_tac (org_code, financial_year, main_code, sub_code)
+```
+
+Running the pipeline twice against the same file leaves `fct_tac` and `dim_trust` with identical row
+counts, while `source_sha256` records the exact workbook content used.
 
 ---
 
