@@ -48,7 +48,14 @@ data/raw/*.xlsx  →  python/ingestion/load_tac_data.py       →  nhs_bronze.* 
                  →  python/transformation/transform_tac_data.py   →  data/processed/transformed/*.csv
                  →  python/transformation/validate_tac_data.py    →  data/processed/validation_report.csv
                  →  python/reporting/export_for_powerbi.py        →  data/processed/powerbi_export/*.csv
+                 →  python/reporting/export_for_analysis.py       →  analysis/data/*.parquet
+                                                                      → analysis/notebooks, analysis/app
 ```
+
+The analysis layer (`analysis/`) never connects to MySQL: `nhs_analysis.py` loads the Parquet files and
+holds the shared sector colours and £m conversion, and both the notebooks and the Shiny app import it.
+The notebooks are committed **with outputs** so charts render on GitHub — re-execute them after any data
+change rather than editing figures by hand.
 
 Each Excel file drives one `financial_year` × `trust_type` (`NHS_TRUST` or `FOUNDATION_TRUST`) load. Each
 annual file contains both Current Year (CY) and Prior Year (PY) rows for comparison. Bronze preserves both;
@@ -158,6 +165,12 @@ python python/transformation/transform_tac_data.py
 
 # 5. Export CSVs for Power BI → data/processed/powerbi_export/
 python python/reporting/export_for_powerbi.py
+
+# 6. Analysis layer (optional): Parquet export, seaborn notebooks, Shiny app — see analysis/README.md
+pip install -r requirements-analysis.txt
+python python/reporting/export_for_analysis.py     # → analysis/data/*.parquet (git-ignored)
+jupyter nbconvert --to notebook --execute --inplace analysis/notebooks/*.ipynb
+shiny run analysis/app/app.py
 ```
 
 All database scripts read `DB_PASSWORD` from the environment (no default — they raise `RuntimeError` if
