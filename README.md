@@ -50,17 +50,19 @@ The report design covers an executive summary, income and expenditure, cost pres
 
 [Power BI setup guide](power_bi/setup_guide.md) | [DAX measures](power_bi/dax_measures.md)
 
-## Analysis notebooks and Shiny app
+## SQL analysis: board questions
 
 The [analysis layer](analysis/README.md) answers the questions a trust board or finance director asks of
-the accounts. Three seaborn notebooks each take one question: where the financial pressure sits by
-sector, which cost lines drive the deficits, and how one trust compares with its sector peers. A Shiny
-for Python app turns the same data into an interactive explorer: pick a year, a sector and a trust, and
-benchmark it against its peers.
+the accounts, in SQL. Three query files in [`sql/analysis/`](sql/analysis/) each take one question: where the
+financial pressure sits by sector, which cost lines drive the deficits, and how one trust compares with its
+peers. The queries use window functions (`LAG`, `RANK`, `NTILE`, `PERCENT_RANK`), `WITH ROLLUP`, medians
+built from `ROW_NUMBER()`, pivots straight out of the long fact table, and a profit bridge whose steps reconcile
+exactly to the change in the result. No query names a year or a trust.
 
-Both read small Parquet files exported from the Gold views, so neither needs the database to run.
+A notebook per question shows each query next to its result, so the SQL can be read on GitHub without a
+database.
 
-[Analysis README](analysis/README.md) | [01 Financial pressure](analysis/notebooks/01_financial_pressure_by_sector.ipynb) | [02 Cost drivers](analysis/notebooks/02_cost_drivers.ipynb) | [03 Peer benchmarking](analysis/notebooks/03_peer_benchmarking.ipynb)
+[Analysis README](analysis/README.md) | [01 Financial pressure](analysis/notebooks/01_financial_pressure.ipynb) | [02 Cost drivers](analysis/notebooks/02_cost_drivers.ipynb) | [03 Peer benchmarking](analysis/notebooks/03_peer_benchmarking.ipynb)
 
 ## Data architecture
 
@@ -90,7 +92,7 @@ The implementation uses MySQL Bronze, Silver and Gold layers. Detailed schemas, 
 | [Project Documentation](project_documentation.md)                       | Business case, source data, methodology, architecture and implementation    |
 | [2023/24 Financial Review](reports/nhs_sector_financial_review_2324.md) | Detailed findings and financial interpretation                              |
 | [SQL Guide](notebook/sql_database_guide/README.md)                      | How the MySQL schema builds Bronze, Silver and Gold, and how the views work |
-| [Analysis](analysis/README.md)                                          | Seaborn notebooks and the Shiny explorer app, and how to run them           |
+| [SQL Analysis](analysis/README.md)                                      | Board questions answered in SQL, with notebooks showing each query's result |
 | [Power BI Setup Guide](power_bi/setup_guide.md)                         | Relationships and proposed report pages                                     |
 | [DAX Measures](power_bi/dax_measures.md)                                | Financial reporting calculations                                            |
 | [KPI Definitions](sql/views/v_kpis.sql)                                 | The four implemented KPIs, their formulas and RAG bands (header comment)    |

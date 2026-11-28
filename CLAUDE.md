@@ -48,14 +48,19 @@ data/raw/*.xlsx  →  python/ingestion/load_tac_data.py       →  nhs_bronze.* 
                  →  python/transformation/transform_tac_data.py   →  data/processed/transformed/*.csv
                  →  python/transformation/validate_tac_data.py    →  data/processed/validation_report.csv
                  →  python/reporting/export_for_powerbi.py        →  data/processed/powerbi_export/*.csv
-                 →  python/reporting/export_for_analysis.py       →  analysis/data/*.parquet
-                                                                      → analysis/notebooks, analysis/app
+                 →  sql/analysis/0[1-3]_*.sql (via analysis/notebooks)  →  board-question results
+                 →  python/reporting/export_for_analysis.py       →  analysis/data/*.parquet → analysis/app
 ```
 
-The analysis layer (`analysis/`) never connects to MySQL: `nhs_analysis.py` loads the Parquet files and
-holds the shared sector colours and £m conversion, and both the notebooks and the Shiny app import it.
-The notebooks are committed **with outputs** so charts render on GitHub — re-execute them after any data
-change rather than editing figures by hand.
+The analysis layer is **SQL-first**: `sql/analysis/01_financial_pressure.sql`, `02_cost_drivers.sql` and
+`03_peer_benchmarking.sql` hold the analysis, split into queries by `-- name:` marker lines. The notebooks
+call `nhs.sql(file, name)` from `analysis/nhs_analysis.py`, which runs one named query on a single open
+connection (so `SET @org_code` persists) and displays it above its result — keep the logic in the `.sql`
+files, not in pandas. Queries read `v_kpis` once each (not `v_trust_annual_scorecard`, which is several
+times slower) and never hardcode a year or ODS code. The notebooks are committed **with outputs** so the
+queries and results show on GitHub — re-execute them after any data change. Only the Shiny app reads the
+Parquet export. The older `sql/analysis/benchmarking_analysis.sql` and `sector_trend_analysis.sql`
+predate this and still pin `'2023/24'`.
 
 Each Excel file drives one `financial_year` × `trust_type` (`NHS_TRUST` or `FOUNDATION_TRUST`) load. Each
 annual file contains both Current Year (CY) and Prior Year (PY) rows for comparison. Bronze preserves both;
@@ -166,10 +171,10 @@ python python/transformation/transform_tac_data.py
 # 5. Export CSVs for Power BI → data/processed/powerbi_export/
 python python/reporting/export_for_powerbi.py
 
-# 6. Analysis layer (optional): Parquet export, seaborn notebooks, Shiny app — see analysis/README.md
+# 6. SQL analysis (optional) — see analysis/README.md
 pip install -r requirements-analysis.txt
-python python/reporting/export_for_analysis.py     # → analysis/data/*.parquet (git-ignored)
-jupyter nbconvert --to notebook --execute --inplace analysis/notebooks/*.ipynb
+jupyter nbconvert --to notebook --execute --inplace analysis/notebooks/*.ipynb   # runs sql/analysis/0[1-3]_*.sql
+python python/reporting/export_for_analysis.py     # Parquet for the Shiny app only → analysis/data/ (git-ignored)
 shiny run analysis/app/app.py
 ```
 

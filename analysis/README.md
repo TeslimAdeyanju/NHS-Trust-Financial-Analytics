@@ -1,73 +1,91 @@
-# Analysis: seaborn notebooks and Shiny app
+# Analysis: SQL answers to board questions
 
-This folder is the analysis layer on top of the warehouse. It answers the questions a trust board or
-finance director asks of the accounts, in two forms:
+This folder answers the questions a trust board or finance director asks of the accounts, and the
+answers are written in **SQL**. Each question has one query file in [`sql/analysis/`](../sql/analysis/)
+and one notebook here that runs those queries against the MySQL warehouse and shows each query next to
+its result. Python does no analysis: it runs the SQL and, once per notebook, draws a chart from a query
+result.
 
-- **Notebooks** (seaborn): the written analysis, one question per notebook, with the reasoning next to
-  each chart. They render on GitHub.
-- **Shiny app** (Shiny for Python): an interactive explorer for analysts. Pick a year, a sector and a
-  trust, and compare it with its peers. It sits beside the Power BI report as a second way into the
-  same data.
+| Question | SQL file | Notebook |
+| --- | --- | --- |
+| Where does the financial pressure sit, and is it getting worse? | [01_financial_pressure.sql](../sql/analysis/01_financial_pressure.sql) | [01 Financial pressure](notebooks/01_financial_pressure.ipynb) |
+| Has income kept up with costs, and which cost lines grew fastest? | [02_cost_drivers.sql](../sql/analysis/02_cost_drivers.sql) | [02 Cost drivers](notebooks/02_cost_drivers.ipynb) |
+| How does one trust compare with its peers? | [03_peer_benchmarking.sql](../sql/analysis/03_peer_benchmarking.sql) | [03 Peer benchmarking](notebooks/03_peer_benchmarking.ipynb) |
 
-| Notebook | Question |
+## SQL techniques shown
+
+| Technique | Where |
 | --- | --- |
-| [01 Financial pressure by sector](notebooks/01_financial_pressure_by_sector.ipynb) | How many trusts are in deficit, in which sectors, and is it getting worse? |
-| [02 Cost drivers](notebooks/02_cost_drivers.ipynb) | Has income kept up with costs, and which cost lines grew fastest? |
-| [03 Peer benchmarking](notebooks/03_peer_benchmarking.ipynb) | Where does one trust sit within its own sector? |
+| Conditional aggregation and pivots (`SUM(CASE WHEN ...)`) | every file |
+| `GROUP BY ... WITH ROLLUP` with `GROUPING()` labels | `deficit_share_by_sector` |
+| Window functions: `LAG()`, `ROW_NUMBER()`, `RANK()`, `NTILE()`, `PERCENT_RANK()`, `SUM() OVER ()` | every file |
+| Named windows (`WINDOW w AS (...)`) | `sector_result_trend`, `peer_position` |
+| Median without a `MEDIAN()` function (`ROW_NUMBER()` + `COUNT() OVER`) | all three files |
+| Top N per group | `largest_deficits_with_impairments` |
+| Year-on-year transitions with `LAG()` | `surplus_deficit_transitions` |
+| Pivoting SubCodes out of the long (EAV) fact table | `surplus_bridge`, `underlying_result` |
+| A profit bridge stacked with `UNION ALL` that reconciles exactly | `surplus_bridge` |
+| Unpivoting measures to rows with `UNION ALL` | `peer_position` |
+| CTE self-join for nearest-neighbour peer groups | `nearest_peers` |
+| Session-variable parameters (`@org_code`) with a `COALESCE` default | `03_peer_benchmarking.sql` |
+| Data-quality anomaly rule against a group median | `wte_data_quality` |
 
-## How the data gets here
+No query names a year or a trust. Years come from `MIN`/`MAX(financial_year)` in the data, and the trust is
+the `@org_code` parameter, so the files keep working when a new year is loaded.
 
-Neither the notebooks nor the app connect to MySQL. One script reads the Gold views and writes two small
-Parquet files, and everything in this folder reads those:
+## How the queries are organised
 
-```text
-nhs_gold.v_trust_annual_scorecard ─┐
-nhs_gold.v_cash_flow               ├─► python/reporting/export_for_analysis.py ─► analysis/data/trust_year.parquet
-nhs_gold.v_balance_sheet          ─┘
-nhs_silver.fct_tac (TAC08 lines)  ───► python/reporting/export_for_analysis.py ─► analysis/data/expenditure_lines.parquet
-                                                                                          │
-                                       analysis/nhs_analysis.py (load, colours, £m) ◄─────┘
-                                                 │
-                                  notebooks/*.ipynb    app/app.py
+Each query in a file starts with a `-- name:` line, followed by comments saying what it answers and which
+technique it uses. That gives two ways to run them:
+
+```bash
+# Whole file, top to bottom, in any MySQL client
+mysql -u root -p nhs_gold < sql/analysis/01_financial_pressure.sql
+
+# One trust for the benchmarking file
+mysql --commands -u root -p nhs_gold -e "SET @org_code = 'RGR'; SOURCE sql/analysis/03_peer_benchmarking.sql;"
 ```
 
-`analysis/data/` is git-ignored like the rest of the generated data. Regenerate it after every pipeline
-run. [`nhs_analysis.py`](nhs_analysis.py) holds the shared pieces: data loading, derived measures
-(operating margin, current ratio, cash days), the fixed sector colours and the £000s to £m conversion.
+In the notebooks, `nhs.sql(file, name)` (in [`nhs_analysis.py`](nhs_analysis.py)) reads the query with
+that name from the file, runs it on one open connection (so `@org_code` persists between cells), displays
+the SQL and returns the result.
 
-## Run it
+Each query reads `v_kpis` once, and takes the year range from the indexed `nhs_silver.fct_tac`.
+`v_trust_annual_scorecard` gives the same rows but rebuilds a join over the whole fact table every time it
+is referenced, which made the queries several times slower.
+
+## Run the notebooks
 
 From the repository root, after the pipeline has loaded the warehouse:
 
 ```bash
 pip install -r requirements.txt -r requirements-analysis.txt
-
-# 1. Export the Parquet files (needs DB_PASSWORD, like every database script)
-python python/reporting/export_for_analysis.py
-
-# 2. Re-run the notebooks in place, so the committed charts match the data
+export DB_PASSWORD='...'
 jupyter nbconvert --to notebook --execute --inplace analysis/notebooks/*.ipynb
-
-# 3. Start the app, then open http://127.0.0.1:8000
-shiny run analysis/app/app.py
 ```
 
-Notebook 03 benchmarks the trust named in the `TRUST_ORG_CODE` environment variable (an ODS code). Without
-it, the notebook picks the trust with the lowest operating margin in the latest year.
+Notebook 03 benchmarks the trust in the `TRUST_ORG_CODE` environment variable (an ODS code). Without it,
+the SQL defaults to the trust with the lowest operating margin in the latest year.
 
-The notebooks are committed with their outputs so the charts show on GitHub. Re-run step 2 whenever the
-data changes, so the charts never go stale against the warehouse.
+The notebooks are committed with their outputs so the queries and results show on GitHub. Re-run them
+after every data load so the results never go stale.
 
 ## Reading the results
 
 - **Annual, actuals only.** TAC is an annual return, so there is no monthly, budget or forecast analysis.
 - **Operating surplus** is the SoCI line `SCI0140A` as each trust reported it. It includes impairments,
   which are non-cash write-downs of buildings and equipment. NHS England's own performance measure
-  excludes them, so a trust with a large operating deficit but a positive EBITDA margin has usually
-  booked an impairment rather than run short of cash. The notebooks and the app show both margins side by
-  side for this reason. The reconciliation to NHS England's figures is in the
-  [financial reconciliation workpaper](../reports/nhs_financial_reconciliation.md).
-- **Cost per WTE is left out.** The TAC09 whole-time-equivalent figures are incomplete for several trusts,
-  most visibly the ambulance trusts, so pay as a share of income is used instead.
-- **Units:** the data is in £000s and the charts show £m. No chart mixes the two.
-- **Colours:** each sector keeps the same colour on every chart. Deficits are red and surpluses blue.
+  excludes them, so several queries show the result before impairments alongside. The reconciliation to
+  NHS England's figures is in the [financial reconciliation workpaper](../reports/nhs_financial_reconciliation.md).
+- **Cost per WTE is not used.** The `wte_data_quality` query shows why: the TAC09 staff numbers are
+  incomplete for some trusts.
+
+## Shiny explorer app
+
+[`app/app.py`](app/app.py) is a small interactive companion for browsing the same measures by year,
+sector and trust. It reads Parquet files exported from the Gold views, not the database:
+
+```bash
+python python/reporting/export_for_analysis.py   # → analysis/data/*.parquet (git-ignored)
+shiny run analysis/app/app.py
+```
