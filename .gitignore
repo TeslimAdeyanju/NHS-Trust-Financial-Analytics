@@ -31,6 +31,3 @@ build/
 
 # Claude settings (local only)
 .claude/
-
-# Analysis layer aggregates — regenerate with python/reporting/export_for_analysis.py
-analysis/data/

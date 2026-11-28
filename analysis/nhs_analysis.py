@@ -1,16 +1,14 @@
 """
 nhs_analysis.py
 ---------------
-Shared helpers for the analysis layer.
+Shared helpers for the SQL analysis notebooks (analysis/notebooks/).
 
-- The SQL notebooks (analysis/notebooks/) call sql(): it runs one named query from
-  sql/analysis/*.sql against the MySQL warehouse and shows the query above its result, so the
-  SQL file stays the single source of every figure.
-- The Shiny app (analysis/app/) reads the Parquet files written by
-  python/reporting/export_for_analysis.py into analysis/data/, and never touches MySQL.
+The notebooks call sql(): it runs one named query from sql/analysis/*.sql against the MySQL
+warehouse and shows the query above its result, so the SQL file stays the single source of every
+figure. The rest of this module is chart styling: fixed sector colours and a shared seaborn theme.
 
-Units: the warehouse and Parquet files hold £000s (suffix _000s). Charts show £m, converted at
-the edge by to_m(), and every chart axis says which unit it uses. Never mix the two in one visual.
+Units: the warehouse holds £000s (suffix _000s); the queries convert to £m (suffix _m) for
+reading. Never mix the two in one chart.
 """
 
 import os
@@ -21,7 +19,6 @@ from pathlib import Path
 import pandas as pd
 
 ANALYSIS_DIR = Path(__file__).resolve().parent
-DATA_DIR = ANALYSIS_DIR / "data"
 SQL_DIR = ANALYSIS_DIR.parent / "sql" / "analysis"
 
 
@@ -108,58 +105,6 @@ SURPLUS = "#257de0"
 CONTEXT_GREY = "#c4c4c4"
 TEXT = "#191919"
 TEXT_SECONDARY = "#666666"
-
-
-def _read(name: str) -> pd.DataFrame:
-    path = DATA_DIR / name
-    if not path.exists():
-        raise FileNotFoundError(
-            f"{path} not found. Run `python python/reporting/export_for_analysis.py` "
-            "from the repository root first (needs the MySQL warehouse and DB_PASSWORD)."
-        )
-    return pd.read_parquet(path)
-
-
-def load_trust_year() -> pd.DataFrame:
-    """One row per trust per financial year, with a derived operating margin and liquidity."""
-    df = _read("trust_year.parquet")
-    df["sector"] = pd.Categorical(df["sector"], categories=SECTOR_ORDER, ordered=True)
-    df["operating_margin_pct"] = (
-        df["operating_surplus_000s"] / df["total_income_000s"].where(df["total_income_000s"] != 0) * 100
-    )
-    # Current liabilities are stored negative (SoFP sign convention), so flip for the ratio
-    df["current_ratio"] = (
-        df["total_current_assets_000s"]
-        / (-df["total_current_liabilities_000s"]).where(df["total_current_liabilities_000s"] < 0)
-    )
-    # Days of operating cost covered by cash at year end
-    daily_cost = df["total_expenditure_000s"] / 365
-    df["cash_days"] = df["cash_and_cash_equivalents_000s"] / daily_cost.where(daily_cost > 0)
-    return df
-
-
-def load_expenditure_lines() -> pd.DataFrame:
-    """One row per trust per year per TAC08 operating-expense line."""
-    df = _read("expenditure_lines.parquet")
-    df["sector"] = pd.Categorical(df["sector"], categories=SECTOR_ORDER, ordered=True)
-    return df
-
-
-def financial_years(df: pd.DataFrame) -> list[str]:
-    """Financial years present, oldest first ('2021/22' sorts correctly as text)."""
-    return sorted(df["financial_year"].unique())
-
-
-def to_m(value_000s):
-    """£000s → £m, for display only."""
-    return value_000s / 1000
-
-
-def fmt_m(value_000s: float) -> str:
-    """Format a £000s amount as £m text, e.g. -12,345 → '-£12.3m'."""
-    m = to_m(value_000s)
-    sign = "-" if m < 0 else ""
-    return f"{sign}£{abs(m):,.1f}m"
 
 
 def set_style() -> None:

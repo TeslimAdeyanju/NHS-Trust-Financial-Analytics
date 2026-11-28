@@ -53,16 +53,17 @@ The report design covers an executive summary, income and expenditure, cost pres
 ## SQL analysis: board questions
 
 The [analysis layer](analysis/README.md) answers the questions a trust board or finance director asks of
-the accounts, in SQL. Three query files in [`sql/analysis/`](sql/analysis/) each take one question: where the
-financial pressure sits by sector, which cost lines drive the deficits, and how one trust compares with its
-peers. The queries use window functions (`LAG`, `RANK`, `NTILE`, `PERCENT_RANK`), `WITH ROLLUP`, medians
-built from `ROW_NUMBER()`, pivots straight out of the long fact table, and a profit bridge whose steps reconcile
+the accounts, in SQL. Five query files in [`sql/analysis/`](sql/analysis/) each take one question: where the
+financial pressure sits by sector, which cost lines drive the deficits, how one trust compares with its
+peers, how finances have moved nationally and by region, and which kinds of trust do better. The queries use
+window functions (`LAG`, `RANK`, `NTILE`, `PERCENT_RANK`, running totals), `WITH ROLLUP`, medians built from
+`ROW_NUMBER()`, pivots straight out of the long fact table, and a profit bridge whose steps reconcile
 exactly to the change in the result. No query names a year or a trust.
 
 A notebook per question shows each query next to its result, so the SQL can be read on GitHub without a
 database.
 
-[Analysis README](analysis/README.md) | [01 Financial pressure](analysis/notebooks/01_financial_pressure.ipynb) | [02 Cost drivers](analysis/notebooks/02_cost_drivers.ipynb) | [03 Peer benchmarking](analysis/notebooks/03_peer_benchmarking.ipynb)
+[Analysis README](analysis/README.md) | [01 Financial pressure](analysis/notebooks/01_financial_pressure.ipynb) | [02 Cost drivers](analysis/notebooks/02_cost_drivers.ipynb) | [03 Peer benchmarking](analysis/notebooks/03_peer_benchmarking.ipynb) | [04 Sector trends](analysis/notebooks/04_sector_trends.ipynb) | [05 Benchmarking](analysis/notebooks/05_benchmarking.ipynb)
 
 ## Data architecture
 

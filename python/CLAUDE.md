@@ -23,8 +23,7 @@ python/
 │   ├── transform_tac_data.py    # Enrichment: sector flags, YoY, income mix, sector benchmarks — stage ④
 │   └── validate_tac_data.py     # 12 check functions (19 result rows) → data/processed/validation_report.csv — stage ④
 └── reporting/
-    ├── export_for_powerbi.py    # nhs_gold views + nhs_silver dims → 13 CSVs in data/processed/powerbi_export/ — stage ⑤
-    └── export_for_analysis.py   # nhs_gold views + TAC08 lines → 2 Parquet files in analysis/data/ (notebooks + Shiny app)
+    └── export_for_powerbi.py    # nhs_gold views + nhs_silver dims → 13 CSVs in data/processed/powerbi_export/ — stage ⑤
 ```
 
 ## Database Connection

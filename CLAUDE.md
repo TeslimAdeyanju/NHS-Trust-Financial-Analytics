@@ -48,19 +48,17 @@ data/raw/*.xlsx  →  python/ingestion/load_tac_data.py       →  nhs_bronze.* 
                  →  python/transformation/transform_tac_data.py   →  data/processed/transformed/*.csv
                  →  python/transformation/validate_tac_data.py    →  data/processed/validation_report.csv
                  →  python/reporting/export_for_powerbi.py        →  data/processed/powerbi_export/*.csv
-                 →  sql/analysis/0[1-3]_*.sql (via analysis/notebooks)  →  board-question results
-                 →  python/reporting/export_for_analysis.py       →  analysis/data/*.parquet → analysis/app
+                 →  sql/analysis/0[1-5]_*.sql (via analysis/notebooks)  →  board-question results
 ```
 
-The analysis layer is **SQL-first**: `sql/analysis/01_financial_pressure.sql`, `02_cost_drivers.sql` and
-`03_peer_benchmarking.sql` hold the analysis, split into queries by `-- name:` marker lines. The notebooks
+The analysis layer is **SQL-first**: `sql/analysis/01_financial_pressure.sql` through `05_benchmarking.sql`
+hold the analysis, split into queries by `-- name:` marker lines. The notebooks
 call `nhs.sql(file, name)` from `analysis/nhs_analysis.py`, which runs one named query on a single open
 connection (so `SET @org_code` persists) and displays it above its result — keep the logic in the `.sql`
 files, not in pandas. Queries read `v_kpis` once each (not `v_trust_annual_scorecard`, which is several
 times slower) and never hardcode a year or ODS code. The notebooks are committed **with outputs** so the
-queries and results show on GitHub — re-execute them after any data change. Only the Shiny app reads the
-Parquet export. The older `sql/analysis/benchmarking_analysis.sql` and `sector_trend_analysis.sql`
-predate this and still pin `'2023/24'`.
+queries and results show on GitHub — re-execute them after any data change. Don't reintroduce cost per
+WTE: TAC09 staff numbers are incomplete (`wte_data_quality` in `02_cost_drivers.sql` shows why).
 
 Each Excel file drives one `financial_year` × `trust_type` (`NHS_TRUST` or `FOUNDATION_TRUST`) load. Each
 annual file contains both Current Year (CY) and Prior Year (PY) rows for comparison. Bronze preserves both;
@@ -102,7 +100,7 @@ copies. `v_cash_flow` and `v_statement_reconciliation` exist only as standalone 
 - `v_kpis` — joins income/expenditure/workforce views and computes EBITDA margin, pay % of income, cost
   per WTE, net surplus margin, plus RAG flags
 - `v_trust_annual_scorecard` — wide view combining everything, built for DirectQuery and ad-hoc SQL; used
-  by `transform_tac_data.py`, `validate_tac_data.py`, and `sql/analysis/*.sql`. **Not** what
+  by `transform_tac_data.py` and `validate_tac_data.py` (the `sql/analysis/` queries use the faster `v_kpis`). **Not** what
   `export_for_powerbi.py` queries for its core exports — the CSV export reads the individual views
   (including `v_profit_and_loss`/`v_balance_sheet`) separately instead
 
@@ -173,9 +171,7 @@ python python/reporting/export_for_powerbi.py
 
 # 6. SQL analysis (optional) — see analysis/README.md
 pip install -r requirements-analysis.txt
-jupyter nbconvert --to notebook --execute --inplace analysis/notebooks/*.ipynb   # runs sql/analysis/0[1-3]_*.sql
-python python/reporting/export_for_analysis.py     # Parquet for the Shiny app only → analysis/data/ (git-ignored)
-shiny run analysis/app/app.py
+jupyter nbconvert --to notebook --execute --inplace analysis/notebooks/*.ipynb   # runs sql/analysis/0[1-5]_*.sql
 ```
 
 All database scripts read `DB_PASSWORD` from the environment (no default — they raise `RuntimeError` if

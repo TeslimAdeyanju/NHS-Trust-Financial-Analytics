@@ -11,17 +11,23 @@ result.
 | Where does the financial pressure sit, and is it getting worse? | [01_financial_pressure.sql](../sql/analysis/01_financial_pressure.sql) | [01 Financial pressure](notebooks/01_financial_pressure.ipynb) |
 | Has income kept up with costs, and which cost lines grew fastest? | [02_cost_drivers.sql](../sql/analysis/02_cost_drivers.sql) | [02 Cost drivers](notebooks/02_cost_drivers.ipynb) |
 | How does one trust compare with its peers? | [03_peer_benchmarking.sql](../sql/analysis/03_peer_benchmarking.sql) | [03 Peer benchmarking](notebooks/03_peer_benchmarking.ipynb) |
+| How have finances moved, nationally, by sector and by region? | [04_sector_trends.sql](../sql/analysis/04_sector_trends.sql) | [04 Sector trends](notebooks/04_sector_trends.ipynb) |
+| Which kinds of trust do better, and which stand out from peers? | [05_benchmarking.sql](../sql/analysis/05_benchmarking.sql) | [05 Benchmarking](notebooks/05_benchmarking.ipynb) |
 
 ## SQL techniques shown
 
 | Technique | Where |
 | --- | --- |
 | Conditional aggregation and pivots (`SUM(CASE WHEN ...)`) | every file |
-| `GROUP BY ... WITH ROLLUP` with `GROUPING()` labels | `deficit_share_by_sector` |
+| `GROUP BY ... WITH ROLLUP` with `GROUPING()` labels, one and two levels | `deficit_share_by_sector`, `sector_kpis_latest_year` |
 | Window functions: `LAG()`, `ROW_NUMBER()`, `RANK()`, `NTILE()`, `PERCENT_RANK()`, `SUM() OVER ()` | every file |
 | Named windows (`WINDOW w AS (...)`) | `sector_result_trend`, `peer_position` |
 | Median without a `MEDIAN()` function (`ROW_NUMBER()` + `COUNT() OVER`) | all three files |
-| Top N per group | `largest_deficits_with_impairments` |
+| Top N per group, and best and worst N in one pass | `largest_deficits_with_impairments`, `ebitda_movers` |
+| Running totals with an explicit window frame (`ROWS BETWEEN ...`) | `income_concentration_latest_year` |
+| Window function over an aggregate (`RANK() OVER (ORDER BY AVG(...))`) | `regional_health_latest_year` |
+| Bands computed from the data (`NTILE()` labelled by its own `MIN`/`MAX`; `PERCENT_RANK()` cut-offs per sector) | `size_quartile_kpis`, `pay_outliers_latest_year` |
+| Income-weighted margins (`SUM / SUM`) against simple averages | `national_trend` |
 | Year-on-year transitions with `LAG()` | `surplus_deficit_transitions` |
 | Pivoting SubCodes out of the long (EAV) fact table | `surplus_bridge`, `underlying_result` |
 | A profit bridge stacked with `UNION ALL` that reconciles exactly | `surplus_bridge` |
@@ -50,7 +56,7 @@ In the notebooks, `nhs.sql(file, name)` (in [`nhs_analysis.py`](nhs_analysis.py)
 that name from the file, runs it on one open connection (so `@org_code` persists between cells), displays
 the SQL and returns the result.
 
-Each query reads `v_kpis` once, and takes the year range from the indexed `nhs_silver.fct_tac`.
+Each query reads `v_kpis` at most once, and takes the year range from the indexed `nhs_silver.fct_tac`.
 `v_trust_annual_scorecard` gives the same rows but rebuilds a join over the whole fact table every time it
 is referenced, which made the queries several times slower.
 
@@ -79,13 +85,3 @@ after every data load so the results never go stale.
   NHS England's figures is in the [financial reconciliation workpaper](../reports/nhs_financial_reconciliation.md).
 - **Cost per WTE is not used.** The `wte_data_quality` query shows why: the TAC09 staff numbers are
   incomplete for some trusts.
-
-## Shiny explorer app
-
-[`app/app.py`](app/app.py) is a small interactive companion for browsing the same measures by year,
-sector and trust. It reads Parquet files exported from the Gold views, not the database:
-
-```bash
-python python/reporting/export_for_analysis.py   # → analysis/data/*.parquet (git-ignored)
-shiny run analysis/app/app.py
-```
